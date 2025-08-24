@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "confluent-kafka>=2.11.1",
     "dotenv>=0.9.9",
     "fastapi[standard]>=0.116.1",
     "psycopg[binary]>=3.2.9",
