@@ -43,7 +43,7 @@ docker-compose up -d
 ### Manual Setup
 
 ```bash
-
+docker-compose up -d
 ```
 
 ## Database Migrations
