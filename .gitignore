@@ -11,3 +11,10 @@ wheels/
 .env
 !.env.example
 repomix-output.txt
+
+migrations/__pycache__/
+migrations/versions/__pycache__/
+*.pyc
+*.pyo
+*~
+*.swp
