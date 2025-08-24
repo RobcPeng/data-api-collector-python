@@ -43,18 +43,7 @@ docker-compose up -d
 ### Manual Setup
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install .
-
-# Apply database migrations
-alembic upgrade head
-
-# Run the application
-uvicorn app.main:app --reload
 ```
 
 ## Database Migrations
