@@ -113,6 +113,22 @@ async def get_redis(key_store: str):
 @app.post("/test/kafka/producer/send-message")
 async def kafka_test_produce_message(request: KafkaMessage, db: Session = Depends(get_db)):
     try:
+        producer.produce(request.topic_name,request.topic_message)        
+        kafka_event = KafkaEventLog(
+            event_type =  "send-message", 
+            user_id = request.source,
+            topic_name = request.topic_name,
+            topic_message = request.topic_message    
+        )
+        db.add(kafka_event)
+        await db.commit()
+        return {"status": "success", "topic": request.topic_name, "message": request.topic_message}
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+     
+@app.post("/test/kafka/producer/send-message_old_flush")
+async def kafka_test_produce_message_old(request: KafkaMessage, db: Session = Depends(get_db)):
+    try:
         kafka_event = KafkaEventLog(
             event_type =  "send-message", 
             user_id = request.source,
