@@ -95,11 +95,8 @@ async def kafka_test_consume_message(topic_name: str, message_limit: int = 5):
     try:
         messages = []
         consumer.subscribe([topic_name])
-        print("ok")
-        msg_count = 0
         for i in range (message_limit):
             msg = consumer.poll(timeout = 1.0)
-            print(i)
             if msg is None:
                 continue
             if msg.error():
