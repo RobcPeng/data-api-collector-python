@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import get_db, engine
 from app.core.config import settings
+import redis
 
 app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
 
@@ -44,3 +45,20 @@ async def connection_info():
         "checked_out_connections": pool.checkedout(),
         "total_connections": pool.size() + pool.checkedout()
     }
+    
+@app.get("/test/redis")
+async def test_redis():
+    try:
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        r.set('test_key','Hello from FastAPI')
+        value = r.get('test_key')
+        info = r.info()
+        return {
+            "status": "success",
+            "message": str(value),
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
