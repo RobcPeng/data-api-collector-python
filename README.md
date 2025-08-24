@@ -1,18 +1,13 @@
 # Data API Collector
 
-A lightweight, high-performance service for sandboxing ingestions for data pipelines and storing it in PostgreSQL.
-
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.116.1-green.svg)](https://fastapi.tiangolo.com/)
-[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0.43-blue.svg)](https://www.sqlalchemy.org/)
+A lightweight, high-performance service for sandboxing ingestions/orchestrating data pipelines.
 
 ## Features
 
 - Collects and records Kafka events in a PostgreSQL database
 - Provides APIs to produce and consume Kafka messages
-- Implements database migration with Alembic
-- Supports Redis for caching capabilities
-- Containerized setup with Docker Compose
+- Provides APIs for set/get of redis
+- Containerized PostGRES/redis/Zookeeper&Kafka for quick stand up
 
 ## Prerequisites
 
@@ -34,15 +29,12 @@ cd data-api-collector
 
 # Create your environment file
 cp .env.example .env
+
+# maybe update 'your-hardcoded-api-key-here' in Caddyfile
+
 # Edit .env with your settings
 
 # Start services with Docker Compose
-docker-compose up -d
-```
-
-### Manual Setup
-
-```bash
 docker-compose up -d
 ```
 
@@ -74,6 +66,8 @@ alembic downgrade -1
 - `GET /test/orm` - Test ORM connection
 - `GET /test/raw/sql` - Test raw SQL connection
 - `GET /test/redis` - Test Redis connection
+- `POST /test/redis/set` - Test Redis connection
+- `GET /test/redis/get` - Test Redis connection
 - `GET /test/connection-info` - View database connection info
 
 ## Project Structure
@@ -96,15 +90,18 @@ data-api-collector/
 Send a message to Kafka:
 
 ```bash
-curl -X POST http://localhost:8000/test/kafka/producer/send-message \
+curl -X POST http://localhost:{whatever}/test/kafka/producer/send-message \
   -H "Content-Type: application/json" \
+  -H "X-Api-Key: your-hardcoded-api-key-here" \
   -d '{"topic_name": "test-topic", "topic_message": "Hello World", "source": "test-user"}'
 ```
 
 Retrieve stored messages:
 
 ```bash
-curl http://localhost:8000/test/events/kafka
+curl http://localhost:{whatever}/test/events/kafka
+  -H "X-Api-Key: your-hardcoded-api-key-here" \
+
 ```
 
 ## Contributing
