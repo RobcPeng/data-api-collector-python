@@ -1,4 +1,6 @@
+import json
 from socket import timeout
+from typing import Dict
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -6,8 +8,8 @@ from app.core.database import get_db, engine
 from app.core.config import settings
 from confluent_kafka import Producer, Consumer
 import redis
-
-from app.models.events import KafkaMessage, KafkaEventLog
+import json
+from app.models.events import KafkaMessage, KafkaEventLog, RedisReq
 from app.schemas.events import EventBase
 
 app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
@@ -15,6 +17,8 @@ producer = Producer({'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS})
 consumer = Consumer({'bootstrap.servers':settings.KAFKA_BOOTSTRAP_SERVERS, 
                      'group.id':"data-api-collector-test",
                      'auto.offset.reset':'earliest'})
+redis_r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+
 
 
 @app.get("/test/orm")
@@ -59,10 +63,9 @@ async def connection_info():
 @app.get("/test/redis")
 async def test_redis():
     try:
-        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        r.set('test_key','Hello from FastAPI')
-        value = r.get('test_key')
-        info = r.info()
+        redis_r.set('test_key','Hello from FastAPI')
+        value = redis_r.get('test_key')
+        info = redis_r.info()
         return {
             "status": "success",
             "message": str(value),
@@ -73,6 +76,40 @@ async def test_redis():
     except Exception as e:
          return {"status":"error", "message":str(e)} 
      
+@app.post("/test/redis/set")
+async def set_redis(request: RedisReq):
+    try:
+        if isinstance(request.value, (dict, list, tuple)):
+            serialized_value = json.dumps(request.value)
+        else:
+            # For primitive types, convert to string if needed
+            serialized_value = request.value
+        redis_r.set(request.key_store,serialized_value)
+        info = redis_r.info()
+        return {
+            "status": "success",
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+
+@app.get("/test/redis/get")
+async def get_redis(key_store: str):
+    try:
+        value = redis_r.get(key_store)
+        info = redis_r.info()
+        return {
+            "status": "success",
+            "message": str(value),
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+ 
 @app.post("/test/kafka/producer/send-message")
 async def kafka_test_produce_message(request: KafkaMessage, db: Session = Depends(get_db)):
     try:

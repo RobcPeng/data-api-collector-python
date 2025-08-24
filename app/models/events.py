@@ -1,10 +1,23 @@
+from typing import Any
 from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 
-
+class RedisReq(BaseModel):
+    key_store: str
+    value: Any
+    
+    class Config:
+        arbitrary_types_allowed = True        
+        json_schema_extra = {
+            "example": {
+                "key_store": "example_key",
+                "value": [1, "string", {"nested": "object"}]
+            }
+        }
+    
 class KafkaMessage(BaseModel):
     topic_name: str
     topic_message: str
