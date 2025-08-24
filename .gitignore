@@ -20,3 +20,5 @@ migrations/versions/__pycache__/
 *.pyo
 *~
 *.swp
+.python-version
+.DS_Store
