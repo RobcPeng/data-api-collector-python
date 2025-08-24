@@ -11,6 +11,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - app-network
 
   redis:
     image: redis:8.2.1
@@ -20,6 +22,8 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - app-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.10
@@ -30,6 +34,8 @@ services:
     volumes:
       - zookeeper_data:/var/lib/zookeeper
     restart: unless-stopped
+    networks:
+      - app-network
 
   kafka:
     image: confluentinc/cp-kafka:7.4.10
@@ -41,14 +47,64 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_BOOTSTRAP_SERVERS}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    volumes:
-      - kafka_data:/var/lib/kafka/data
     restart: unless-stopped
+    networks:
+      - app-network
+
+  app:
+    build: .
+    container_name: data-api-app
+    depends_on:
+      - postgres
+      - redis
+      - zookeeper
+      - kafka
+    environment:
+      POSTGRES_SERVER: ${POSTGRES_SERVER}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      API_V1_STR: ${API_V1_STR}
+      PROJECT_NAME: ${PROJECT_NAME}
+      DEBUG: ${DEBUG}
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+    restart: unless-stopped
+    networks:
+      - app-network
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: data-api-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./api-keys.json:/etc/caddy/api-keys.json
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
   redis_data:
   zookeeper_data:
-  kafka_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app-network:
+    driver: bridge

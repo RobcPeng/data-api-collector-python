@@ -10,6 +10,8 @@ wheels/
 .venv
 .env
 !.env.example
+api-key.json
+!api-key.json.example
 repomix-output.txt
 
 migrations/__pycache__/

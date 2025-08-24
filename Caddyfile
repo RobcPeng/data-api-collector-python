@@ -1,0 +1,25 @@
+:80 {
+    handle /health {
+        respond "OK" 200
+    }
+
+    handle /test/* {
+        # Check if the X-Api-Key header matches the hardcoded key
+        @unauthorized {
+            not header X-Api-Key "your-hardcoded-api-key-here"
+        }
+
+        # If the key does not match, return a 401 Unauthorized response
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        # If the key is valid, proceed with the reverse proxy
+        reverse_proxy app:8000
+    }
+
+    # Handle any other requests that don't match the /api/* path
+    handle /* {
+        reverse_proxy app:8000
+    }
+}

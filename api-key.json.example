@@ -1,0 +1,25 @@
+{
+  "keys": [
+    {
+      "key": "sk-dev-12345",
+      "name": "Development Key",
+      "description": "Key for development environment",
+      "created": "2025-01-01T00:00:00Z",
+      "permissions": ["read", "write"]
+    },
+    {
+      "key": "sk-prod-67890",
+      "name": "Production Key",
+      "description": "Key for production environment",
+      "created": "2025-01-01T00:00:00Z",
+      "permissions": ["read", "write"]
+    },
+    {
+      "key": "sk-test-abcdef",
+      "name": "Test Key",
+      "description": "Key for testing purposes",
+      "created": "2025-01-01T00:00:00Z",
+      "permissions": ["read"]
+    }
+  ]
+}
