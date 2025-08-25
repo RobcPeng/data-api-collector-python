@@ -1,24 +1,37 @@
-:8000 {
+:80 {
+    # Health check endpoint - no auth required
     handle /health {
         respond "OK" 200
     }
 
+    # Protected test endpoints - require API key
     handle /test/* {
-        # Check if the X-Api-Key header matches the hardcoded key
         @unauthorized {
             not header X-Api-Key "your-hardcoded-api-key-here"
         }
-
-        # If the key does not match, return a 401 Unauthorized response
+        
         handle @unauthorized {
             respond "Unauthorized" 401
         }
         
-        # If the key is valid, proceed with the reverse proxy
         reverse_proxy app:8000
     }
 
-    # Handle any other requests that don't match the /api/* path
+    # Protected Elasticsearch endpoints - require API key
+    handle /elasticsearch/* {
+        @unauthorized {
+            not header X-Api-Key "your-hardcoded-api-key-here"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /elasticsearch
+        reverse_proxy data-api-elasticsearch:9200
+    }
+
+    # Default handler for all other requests (frontend) - no auth required
     handle /* {
         reverse_proxy app:8000
     }

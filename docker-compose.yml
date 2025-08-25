@@ -14,6 +14,22 @@ services:
     networks:
       - app-network
 
+  elasticsearch:
+    image: elasticsearch:9.1.2
+    container_name: data-api-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./elastic_data:/usr/share/elasticsearch/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
   redis:
     image: redis:8.2.1
     container_name: data-api-redis
@@ -32,7 +48,8 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - zookeeper_data:/var/lib/zookeeper
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     restart: unless-stopped
     networks:
       - app-network
@@ -51,6 +68,8 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_BOOTSTRAP_SERVERS}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     restart: unless-stopped
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - app-network
 
@@ -86,7 +105,7 @@ services:
     container_name: data-api-caddy
     restart: unless-stopped
     ports:
-      - "10800:80"
+      - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
@@ -102,6 +121,8 @@ volumes:
   postgres_data:
   redis_data:
   zookeeper_data:
+  zookeeper_log:
+  kafka_data:
   caddy_data:
   caddy_config:
 
