@@ -17,6 +17,7 @@ services:
   elasticsearch:
     image: elasticsearch:9.1.2
     container_name: data-api-elasticsearch
+    user: "1000:1000"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -25,7 +26,7 @@ services:
       - "9200:9200"
       - "9300:9300"
     volumes:
-      - ./elastic_data:/usr/share/elasticsearch/data
+      - elastic_data:/usr/share/elasticsearch/data
     networks:
       - app-network
     restart: unless-stopped
@@ -125,6 +126,7 @@ volumes:
   kafka_data:
   caddy_data:
   caddy_config:
+  elastic_data:
 
 networks:
   app-network:
