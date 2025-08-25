@@ -22,3 +22,5 @@ migrations/versions/__pycache__/
 *.swp
 .python-version
 .DS_Store
+elastic_data
+kafka_data
