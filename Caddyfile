@@ -18,14 +18,6 @@
         reverse_proxy app:8000
     }
 
-    handle /kafka/* {
-
-       # basicauth / {
-       #     iot_device_user JNDxQ8iB9qH1k8j7n5m3
-       # }
-
-        reverse_proxy app:9092
-    }
     # Handle any other requests that don't match the /api/* path
     handle /* {
         reverse_proxy app:8000
