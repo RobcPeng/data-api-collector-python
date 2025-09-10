@@ -5,7 +5,7 @@
     }
 
     # Protected test endpoints - require API key
-    handle /test/* {
+    handle /api/* {
         @unauthorized {
             not header X-Api-Key "your-hardcoded-api-key-here"
         }
@@ -29,6 +29,32 @@
         
         uri strip_prefix /elasticsearch
         reverse_proxy data-api-elasticsearch:9200
+    }
+
+    handle /neo4j/* {
+        @unauthorized {
+            not header X-Api-Key "your-hardcoded-api-key-here"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /neo4j
+        reverse_proxy data-api-neo4j:7474
+    }
+
+    handle /neo4j-bolt/* {
+        @unauthorized {
+            not header X-Api-Key "your-hardcoded-api-key-here"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /neo4j-bolt
+        reverse_proxy data-api-neo4j:7687
     }
 
     # Default handler for all other requests (frontend) - no auth required

@@ -8,7 +8,7 @@ from app.core.config import settings
 router = APIRouter(prefix="/data-sources", tags=["data-sources"])
 
 
-@router.get("/test/orm")
+@router.get("/orm")
 async def test_orm_connection(db: Session = Depends(get_db)):
     try:
         result = db.execute(text("SELECT version() as db_version"))
@@ -21,7 +21,7 @@ async def test_orm_connection(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status":"error", "message":str(e)}
     
-@router.get("/test/raw/sql")
+@router.get("/raw/sql")
 async def test_raw_sql():
     try:
         with engine.connect() as conn:
@@ -37,7 +37,7 @@ async def test_raw_sql():
          return {"status":"error", "message":str(e)} 
      
      
-@router.get("/test/connection-info")
+@router.get("/connection-info")
 async def connection_info():
     pool = engine.pool
     return {

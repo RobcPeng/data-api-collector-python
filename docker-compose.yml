@@ -31,6 +31,49 @@ services:
       - app-network
     restart: unless-stopped
 
+  neo4j:
+    image: neo4j:community
+    container_name: data-api-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474" # HTTP Browser interface
+      - "7687:7687" # Bolt protocol
+    environment:
+      # Authentication
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+
+      # Memory settings
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
+
+      # Security and plugins
+      NEO4J_dbms_security_procedures_unrestricted: gds.*,apoc.*
+      NEO4J_dbms_security_procedures_allowlist: gds.*,apoc.*
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+
+      # Logging
+      NEO4J_dbms_logs_debug_level: INFO
+
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+
+    networks:
+      - app-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   redis:
     image: redis:8.2.1
     container_name: data-api-redis
@@ -127,7 +170,10 @@ volumes:
   caddy_data:
   caddy_config:
   elastic_data:
-
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
 networks:
   app-network:
     driver: bridge

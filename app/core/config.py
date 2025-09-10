@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     DATABASE_URL: str
     POSTGRES_PORT: str
+    NEO4J_PASSWORD: str
     
     DEBUG: bool = False
     PROJECT_NAME: str = "Data API Collector"

@@ -8,7 +8,7 @@ from app.models.events import RedisReq
 router = APIRouter(prefix="/redis", tags=["redis"])
 redis_r = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-@router.get("/test/redis")
+@router.get("/test")
 async def test_redis():
     try:
         redis_r.set('test_key','Hello from FastAPI')
@@ -24,7 +24,7 @@ async def test_redis():
     except Exception as e:
          return {"status":"error", "message":str(e)} 
      
-@router.post("/test/redis/set")
+@router.post("/set")
 async def set_redis(request: RedisReq):
     try:
         if isinstance(request.value, (dict, list, tuple)):
@@ -43,7 +43,7 @@ async def set_redis(request: RedisReq):
     except Exception as e:
          return {"status":"error", "message":str(e)} 
 
-@router.get("/test/redis/get")
+@router.get("/get")
 async def get_redis(key_store: str):
     try:
         value = redis_r.get(key_store)
