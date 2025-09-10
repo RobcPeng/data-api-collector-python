@@ -7,7 +7,7 @@
     # Protected test endpoints - require API key
     handle /api/* {
         @unauthorized {
-            not header X-Api-Key "your-hardcoded-api-key-here"
+            not header X-Api-Key "{$SECRET_KEY}"
         }
         
         handle @unauthorized {
@@ -20,7 +20,7 @@
     # Protected Elasticsearch endpoints - require API key
     handle /elasticsearch/* {
         @unauthorized {
-            not header X-Api-Key "your-hardcoded-api-key-here"
+            not header X-Api-Key "{$SECRET_KEY}"
         }
         
         handle @unauthorized {
@@ -33,7 +33,7 @@
 
     handle /neo4j/* {
         @unauthorized {
-            not header X-Api-Key "your-hardcoded-api-key-here"
+            not header X-Api-Key "{$SECRET_KEY}"
         }
         
         handle @unauthorized {
@@ -46,7 +46,7 @@
 
     handle /neo4j-bolt/* {
         @unauthorized {
-            not header X-Api-Key "your-hardcoded-api-key-here"
+            not header X-Api-Key "{$SECRET_KEY}"
         }
         
         handle @unauthorized {
