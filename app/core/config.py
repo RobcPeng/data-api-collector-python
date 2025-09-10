@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str 
     POSTGRES_DB: str
     DATABASE_URL: str
+    POSTGRES_PORT: str
     
     DEBUG: bool = False
     PROJECT_NAME: str = "Data API Collector"

@@ -1,15 +1,14 @@
 import json
-from fastapi import FastAPI
+from fastapi import APIRouter
 from app.core.config import settings
 import redis
-import json
 from app.models.events import RedisReq
 
 
-app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
+router = APIRouter(prefix="/redis", tags=["redis"])
 redis_r = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-@app.get("/test/redis")
+@router.get("/test/redis")
 async def test_redis():
     try:
         redis_r.set('test_key','Hello from FastAPI')
@@ -25,7 +24,7 @@ async def test_redis():
     except Exception as e:
          return {"status":"error", "message":str(e)} 
      
-@app.post("/test/redis/set")
+@router.post("/test/redis/set")
 async def set_redis(request: RedisReq):
     try:
         if isinstance(request.value, (dict, list, tuple)):
@@ -44,7 +43,7 @@ async def set_redis(request: RedisReq):
     except Exception as e:
          return {"status":"error", "message":str(e)} 
 
-@app.get("/test/redis/get")
+@router.get("/test/redis/get")
 async def get_redis(key_store: str):
     try:
         value = redis_r.get(key_store)

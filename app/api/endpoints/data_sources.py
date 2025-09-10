@@ -1,14 +1,14 @@
-from fastapi import FastAPI, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import get_db, engine
 from app.core.config import settings
 
 
-app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
+router = APIRouter(prefix="/data-sources", tags=["data-sources"])
 
 
-@app.get("/test/orm")
+@router.get("/test/orm")
 async def test_orm_connection(db: Session = Depends(get_db)):
     try:
         result = db.execute(text("SELECT version() as db_version"))
@@ -21,7 +21,7 @@ async def test_orm_connection(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status":"error", "message":str(e)}
     
-@app.get("/test/raw/sql")
+@router.get("/test/raw/sql")
 async def test_raw_sql():
     try:
         with engine.connect() as conn:
@@ -37,7 +37,7 @@ async def test_raw_sql():
          return {"status":"error", "message":str(e)} 
      
      
-@app.get("/test/connection-info")
+@router.get("/test/connection-info")
 async def connection_info():
     pool = engine.pool
     return {
