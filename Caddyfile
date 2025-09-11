@@ -1,4 +1,4 @@
-:80 {
+:"{$CADDY_PORT}" {
     # Health check endpoint - no auth required
     handle /health {
         respond "OK" 200

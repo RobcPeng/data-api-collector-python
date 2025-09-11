@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
     OLLAMA_API_KEY: str = "ollama"
     
+    CADDY_PORT: int 
     
     class Config:
         env_file = ".env"
