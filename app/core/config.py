@@ -2,6 +2,8 @@ from re import S
 from pydantic_settings import BaseSettings
 from typing import Optional
 
+from redis.utils import C
+
 class Settings(BaseSettings):
     
     POSTGRES_SERVER: str
@@ -30,11 +32,16 @@ class Settings(BaseSettings):
     
     OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
     OLLAMA_API_KEY: str = "ollama"
-    
-    CADDY_PORT: int 
+
+    POSTGRES_PORT_EXTERNAL: str
+    REDIS_PORT_EXTERNAL: str
+    CADDY_HTTP_PORT: str
+    CADDY_HTTPS_PORT: str
+
     
     class Config:
         env_file = ".env"
         case_sensitive = True
+        
 
 settings = Settings()
