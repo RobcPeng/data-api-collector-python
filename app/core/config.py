@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: str
     
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_API_KEY: str = "ollama"
+    
     
     class Config:
         env_file = ".env"
