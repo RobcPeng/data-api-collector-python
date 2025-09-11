@@ -24,3 +24,4 @@ migrations/versions/__pycache__/
 .DS_Store
 elastic_data
 kafka_data
+huggingface_cache/
