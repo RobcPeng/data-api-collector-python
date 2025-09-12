@@ -6,10 +6,6 @@ from app.utils.device_utils import get_device_and_dtype
 
 device, dtype = get_device_and_dtype()
 
-
-model = AutoModel.from_pretrained("openbmb/MiniCPM-V-4_5", trust_remote_code=True,attn_implementation='sdpa', torch_dtype=dtype).eval().to(device)
-tokenizer = AutoTokenizer.from_pretrained("openbmb/MiniCPM-V-4_5", trust_remote_code=True)
-
 def initialize_model():
     global MODEL, TOKENIZER, DEVICE
     if MODEL is None:
@@ -19,7 +15,7 @@ def initialize_model():
         MODEL = AutoModel.from_pretrained(
             'openbmb/MiniCPM-V-4_5',
             trust_remote_code=True,
-            torch_dtype=dtype,
+            dtype=dtype,
             attn_implementation='sdpa'
         ).eval().to(device)
         
