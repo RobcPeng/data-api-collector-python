@@ -88,6 +88,16 @@ async def analyze_image(image: Image.Image, question: str) -> str:
     """
     if "model" not in model_cache or "type" not in model_cache:
         raise HTTPException(status_code=503, detail="Model is not loaded or type is unknown.")
+    
+    prompt = """
+You are an OCR assistant. Your task is to identify and extract all visible text from the image provided. Preserve the original formatting as closely as possible, including:
+
+Line breaks and paragraphs
+Headings and subheadings
+Any tables, lists, bullet points, or numbered items
+Special characters, spacing, and alignment
+Output strictly the extracted text in Markdown format, reflecting the layout and structure of the original image. Do not add commentary, interpretation, or summarization—only return the raw text content with its formatting.
+"""
 
     model_type = model_cache["type"]
     llm = model_cache["model"]
@@ -102,14 +112,22 @@ async def analyze_image(image: Image.Image, question: str) -> str:
         base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
         image_url = f"data:image/png;base64,{base64_image}"
         
-        messages = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url}}, {"type": "text", "content": question}]}]
+        messages = [{
+            "role": "user", 
+            "content": [
+                {"type": "image_url", "image_url": {"url": image_url}}, 
+                {"type": "text", "content": f"{prompt}\n\n{question}"}
+            ]
+        }]
         response = llm.create_chat_completion(messages=messages)
         return response['choices'][0]['message']['content']
 
     # --- Logic for Transformers model ---
     elif model_type == "transformers":
         tokenizer = model_cache["tokenizer"]
-        messages = [{'role': 'user', 'content': [image, question]}]
+        # Combine prompt and question for the transformers model
+        combined_text = f"{prompt}\n\n{question}"
+        messages = [{'role': 'user', 'content': [image, combined_text]}]
         
         answer_stream = llm.chat(
             msgs=messages,
