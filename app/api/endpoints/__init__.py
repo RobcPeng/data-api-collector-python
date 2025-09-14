@@ -5,7 +5,7 @@ from .redis import router as redis_router
 from .neo4j import router as neo_data_sources_router
 from .llms import router as llm_router
 from .ollama_test import router as ollama_test_router
-from .multimodal_ocr import router as multimodal_router
+from .service_ocr import router as service_ocr_router
 # Create main router that combines all endpoint routers
 router = APIRouter(prefix="/api/v1")
 
@@ -16,7 +16,7 @@ router.include_router(kafka_router)
 router.include_router(redis_router)
 router.include_router(llm_router)
 router.include_router(ollama_test_router)
-router.include_router(multimodal_router)
+router.include_router(service_ocr_router)
 
 
 

@@ -1,0 +1,379 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+ocr_service/
+  utils/
+    device_utils.py
+    model_util_gguf.py
+    model_util.py
+  main.py
+.python-version
+Dockerfile
+pyproject.toml
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="ocr_service/utils/device_utils.py">
+import torch
+from typing import Tuple
+
+def get_device() -> str:
+    """
+    Automatically detect the best available device for PyTorch operations.
+    
+    Returns:
+        str: Device string - 'cuda', 'mps', or 'cpu'
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():  # Mac M1/M2
+        return "mps"
+    else:
+        return "cpu"
+
+def get_device_and_dtype() -> Tuple[str, torch.dtype]:
+    """
+    Get device and appropriate dtype for that device.
+    
+    Returns:
+        Tuple[str, torch.dtype]: Device and recommended dtype
+    """
+    device = get_device()
+    
+    if device == "cuda":
+        dtype = torch.bfloat16
+    elif device == "mps":
+        dtype = torch.float16  # MPS doesn't support bfloat16
+    else:
+        dtype = torch.float32  # CPU fallback
+    
+    return device, dtype
+
+def get_device_info() -> dict:
+    """
+    Get comprehensive device information.
+    
+    Returns:
+        dict: Device information including capabilities
+    """
+    device = get_device()
+    info = {
+        "device": device,
+        "cuda_available": torch.cuda.is_available(),
+        "mps_available": torch.backends.mps.is_available(),
+    }
+    
+    if device == "cuda":
+        info.update({
+            "cuda_version": torch.version.cuda,
+            "gpu_count": torch.cuda.device_count(),
+            "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+        })
+    
+    return info
+</file>
+
+<file path="ocr_service/utils/model_util_gguf.py">
+import base64
+from io import BytesIO
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
+from PIL import Image
+from llama_cpp import Llama
+from huggingface_hub import hf_hub_download
+import logging 
+
+# --- Model Configuration ---
+# This is the main 4-bit quantized model file. We recommend Q4_K_M for a good balance.
+MODEL_REPO = "huihui-ai/Huihui-MiniCPM-V-4_5-abliterated"
+MODEL_FILE = "GGUF/ggml-model-Q4_K_M.gguf" 
+CLIP_REPO = "openbmb/MiniCPM-V-4_5-gguf"
+CLIP_FILE = "mmproj-model-f16.gguf"
+
+# too big
+model_cache = {}
+set_model_name = "openbmb/MiniCPM-V-4_5" #.env later
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Loads the GGUF model directly into the cache on startup."""
+    logging.info("Initializing GGUF model...")
+    
+    model_path = hf_hub_download(repo_id=MODEL_REPO, filename=MODEL_FILE)
+    clip_path = hf_hub_download(repo_id=CLIP_REPO, filename=CLIP_FILE)
+
+    model_cache["model"] = Llama(
+        model_path=model_path,
+        clip_model_path=clip_path,
+        n_ctx=2048,
+        verbose=True,
+        n_threads=4,
+        chat_format="qwen"
+    )
+    
+    logging.info("✅ GGUF model loaded successfully. Service is ready.")
+    yield
+    model_cache.clear()
+           
+async def analyze_image(image: Image.Image, question: str) -> str:
+    """Analyzes an image using the loaded GGUF model."""
+    if "model" not in model_cache:
+        raise HTTPException(status_code=503, detail="GGUF model not ready.")
+    
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    image_data_uri = f"data:image/png;base64,{base64_image}"
+    
+    llm = model_cache["model"]
+    
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": image_data_uri}},
+                {"type": "text", "content": question}
+            ]
+        }
+    ]
+    
+    response = llm.create_chat_completion(messages=messages)
+    print(response)
+    return response['choices'][0]['message']['content']
+</file>
+
+<file path="ocr_service/utils/model_util.py">
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from transformers import AutoModel, AutoTokenizer
+from PIL import Image
+from fastapi import FastAPI, HTTPException
+from .device_utils import get_device_and_dtype
+import logging
+from huggingface_hub import hf_hub_download
+
+
+
+# too big
+model_cache = {}
+set_model_name = "openbmb/MiniCPM-V-4_5" #.env later
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    device, dtype = get_device_and_dtype()
+    logging.info(f"Loading model '{set_model_name}' onto device '{device}'...")
+    model_cache["model"], model_cache["tokenizer"] = initialize_model()
+    logging.info("✅ Model loaded successfully.")
+    
+    yield
+
+    model_cache.clear()
+    logging.info("Model cache cleared.")
+    
+
+def initialize_model():
+    """
+    Loads the model and tokenizer from Hugging Face.
+    Returns:
+        tuple: (loaded_model, loaded_tokenizer)
+    """
+    device, dtype = get_device_and_dtype()
+    logging.info(f"Loading model onto device '{device}'...")
+    
+    model = AutoModel.from_pretrained(
+        set_model_name,
+        trust_remote_code=True,
+        dtype=dtype,
+        attn_implementation='sdpa'
+    ).eval().to(device)
+    
+    tokenizer = AutoTokenizer.from_pretrained(
+        set_model_name,
+        trust_remote_code=True
+    )
+    
+    # FIX: Return the loaded model and tokenizer
+    return model, tokenizer
+        
+async def analyze_image(image: Image.Image, question: str) -> AsyncGenerator[str, None]:
+    """Placeholder function - implement with your actual model"""
+    if 'model' not in model_cache:
+        raise HTTPException(status_code=503, detail="Model not ready")
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+        msgs = [{'role': 'user', 'content': [image, question]}]
+
+        model = model_cache['model']
+        tokenizer = model_cache['tokenizer']
+
+        answer = model.chat(
+                msgs=msgs,
+                tokenizer=tokenizer,
+                enable_thinking=False,
+                stream=True
+            )
+            
+        
+        full_response = "".join(list(answer))
+    
+        return full_response
+</file>
+
+<file path="ocr_service/main.py">
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import AsyncGenerator
+from PIL import Image
+from io import BytesIO
+import logging
+
+# We'll create this file next
+from .utils.model_util_gguf import lifespan, analyze_image
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize the FastAPI app with a lifespan manager
+# This will load the model on startup
+app = FastAPI(lifespan=lifespan)
+
+class AnalysisResponse(BaseModel):
+    response: str
+    model_used: str
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for the service."""
+    return {"status": "healthy", "service": "OCR Service"}
+
+@app.post("/analyze")
+async def analyze_endpoint(
+    question: str = Form(...),
+    image: UploadFile = File(...)
+):
+    """
+    Analyzes an image with a question.
+    This endpoint supports both regular and streaming responses.
+    """
+
+    image_data = await image.read()
+    pil_image = Image.open(BytesIO(image_data))
+
+    # The model returns a generator for streaming
+    generated_text = await analyze_image(pil_image, question)
+    
+    return AnalysisResponse(
+        response=generated_text,
+        model_used="MiniCPM-V-4_5"
+    )
+</file>
+
+<file path=".python-version">
+3.13
+</file>
+
+<file path="Dockerfile">
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    curl \
+    gcc \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements files
+COPY pyproject.toml uv.lock ./
+
+# Install uv and dependencies
+RUN pip install uv
+
+WORKDIR /ocr_app
+
+# Install Python dependencies
+RUN uv sync --frozen
+
+# Copy the application code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 8002
+
+# Run the application
+CMD ["uv", "run", "uvicorn", "ocr_service.main:app", "--host", "0.0.0.0", "--port", "8002"]
+</file>
+
+<file path="pyproject.toml">
+[project]
+name = "ocr-service"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "accelerate>=1.10.1",
+    "fastapi[standard]>=0.116.1",
+    "pillow>=11.3.0",
+    "python-multipart>=0.0.20",
+    "sentence-transformers>=5.1.0",
+    "tokenizers>=0.22.0",
+    "torch>=2.8.0",
+    "transformers>=4.56.1",
+    "uvicorn>=0.35.0",
+    "scikit-learn>=1.7.2",
+    "sentence-transformers>=5.1.0",
+    "sqlalchemy>=2.0.43",
+    "torchaudio>=2.8.0",
+    "torchvision>=0.23.0",
+    "llama-cpp-python>=0.3.16",
+    "huggingface-hub>=0.34.4",
+]
+</file>
+
+</files>

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     CADDY_HTTP_PORT: str
     CADDY_HTTPS_PORT: str
 
+    MODEL_TYPE: str
     
     class Config:
         env_file = ".env"

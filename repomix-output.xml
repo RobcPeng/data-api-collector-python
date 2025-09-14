@@ -1,0 +1,2423 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: *.lock, *.md
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  api/
+    endpoints/
+      __init__.py
+      data_sources.py
+      kafka.py
+      llms.py
+      multimodal_ocr.py
+      neo4j.py
+      ollama_test.py
+      redis.py
+  core/
+    config.py
+    database.py
+    neo_database.py
+  models/
+    events.py
+  schemas/
+    events.py
+  utils/
+    ollama/
+      ollama_config.py
+      ollama_functions.py
+    pydantic_models/
+      graph.py
+      project_details.py
+      requirements.py
+    device_utils.py
+  main.py
+migrations/
+  versions/
+    cfcfebbb11ac_create_kafka_event_logs_table.py
+  env.py
+  README
+  script.py.mako
+services/
+  ocr_service/
+    utils/
+      hf_utils.py
+    Dockerfile
+    main.py
+    pyproject.toml
+.env.example
+.gitignore
+alembic.ini
+Caddyfile
+docker-compose.yml
+Dockerfile
+pyproject.toml
+startup.sh
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="services/ocr_service/utils/hf_utils.py">
+from transformers import AutoModel, AutoTokenizer
+from PIL import Image
+from fastapi import HTTPException
+from app.utils.device_utils import get_device_and_dtype
+
+
+device, dtype = get_device_and_dtype()
+
+def initialize_model():
+    global MODEL, TOKENIZER, DEVICE
+    if MODEL is None:
+        device, dtype = get_device_and_dtype()
+        DEVICE = device
+        
+        MODEL = AutoModel.from_pretrained(
+            'openbmb/MiniCPM-V-4_5',
+            trust_remote_code=True,
+            dtype=dtype,
+            attn_implementation='sdpa'
+        ).eval().to(device)
+        
+        TOKENIZER = AutoTokenizer.from_pretrained(
+            'openbmb/MiniCPM-V-4_5',
+            trust_remote_code=True
+        )
+        
+def analyze_image(image: Image.Image, question: str) -> str:
+    """Placeholder function - implement with your actual model"""
+    try:
+        initialize_model()
+        
+        if not isinstance(image, Image.Image):
+            raise ValueError("Expected PIL Image object")
+        
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
+        msgs = [{'role': 'user', 'content': [image, question]}]
+
+        answer = MODEL.chat(
+            msgs=msgs,
+            tokenizer=TOKENIZER,
+            enable_thinking=False,
+            stream=True
+        )
+        
+        generated_text = ""
+        for new_text in answer:
+            generated_text += new_text
+        
+        return generated_text
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing image: {str(e)}")
+</file>
+
+<file path="services/ocr_service/Dockerfile">
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements files
+COPY pyproject.toml uv.lock ./
+
+# Install uv and dependencies
+RUN pip install uv
+
+WORKDIR /ocr_app
+
+# Install Python dependencies
+RUN uv sync --frozen
+
+# Copy the application code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 8001
+
+# Run the application
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+</file>
+
+<file path="services/ocr_service/main.py">
+def main():
+    print("Hello from ocr-service!")
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="services/ocr_service/pyproject.toml">
+[project]
+name = "ocr-service"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "accelerate>=1.10.1",
+    "fastapi[standard]>=0.116.1",
+    "pillow>=11.3.0",
+    "python-multipart>=0.0.20",
+    "sentence-transformers>=5.1.0",
+    "tokenizers>=0.22.0",
+    "torch>=2.8.0",
+    "transformers>=4.56.1",
+    "uvicorn>=0.35.0",
+]
+</file>
+
+<file path="app/api/endpoints/llms.py">
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import Optional
+
+
+router = APIRouter(prefix="/llms", tags=["llms"])
+</file>
+
+<file path="app/api/endpoints/multimodal_ocr.py">
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+import base64
+from io import BytesIO
+from PIL import Image
+from app.utils.hugging_face.hf_utils import analyze_image
+
+
+
+router = APIRouter(prefix="/multimodal_ocr", tags=["multimodal"])
+
+class ImageAnalysisRequest(BaseModel):
+    question: str
+    image_base64: Optional[str] = None
+
+class ImageAnalysisResponse(BaseModel):
+    response: str
+    model_used: str
+    status: str
+
+@router.post("/analyze-image", response_model=ImageAnalysisResponse)
+async def analyze_image_with_question(
+    question: str,
+    image: UploadFile = File(...)
+):
+    """Upload an image and ask a question about it"""
+    # Load image
+    image_data = await image.read()
+    pil_image = Image.open(BytesIO(image_data))
+    
+    # Call your model (implement in utils)
+    response = analyze_image(pil_image, question)
+    
+    return ImageAnalysisResponse(
+        response=response,
+        model_used="MiniCPM-V-4_5",
+        status="success"
+    )
+
+@router.post("/ocr")
+async def extract_text_from_image(image: UploadFile = File(...)):
+    """Extract text from an image using OCR"""
+    image_data = await image.read()
+    pil_image = Image.open(BytesIO(image_data))
+    
+    # OCR-specific prompt
+    response = analyze_image(pil_image, "Extract all text from this image")
+    
+    return {"extracted_text": response, "status": "success"}
+
+@router.post("/chart-analysis")
+async def analyze_chart(
+    image: UploadFile = File(...),
+    analysis_type: str = "summary"
+):
+    """Analyze charts, graphs, or data visualizations"""
+    prompts = {
+        "summary": "Describe what this chart shows",
+        "data": "Extract the key data points from this chart",
+        "insights": "What insights can you derive from this chart?"
+    }
+    
+    image_data = await image.read()
+    pil_image = Image.open(BytesIO(image_data))
+    
+    prompt = prompts.get(analysis_type, prompts["summary"])
+    response = analyze_image(pil_image, prompt)
+    
+    return {"analysis": response, "type": analysis_type, "status": "success"}
+</file>
+
+<file path="app/api/endpoints/neo4j.py">
+from fastapi import APIRouter, Depends, HTTPException
+from neo4j.exceptions import ServiceUnavailable, AuthError
+from app.core.neo_database import Neo4jClient, get_neo4j_session
+import time
+
+router = APIRouter(prefix="/data-sources", tags=["data-sources"])
+
+@router.get("/neo4j/health")
+async def neo4j_health_check():
+    """Basic health check for Neo4j database."""
+    start_time = time.time()
+    try:
+        driver = Neo4jClient.get_driver()
+        driver.verify_connectivity()
+        
+        # Simple query to verify database is responsive
+        with get_neo4j_session() as session:
+            result = session.run("RETURN 1 as test")
+            value = result.single()["test"]
+            
+        response_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "message": "Neo4j connection successful",
+            "response_time_ms": round(response_time * 1000, 2),
+            "test_value": value
+        }
+    except ServiceUnavailable:
+        raise HTTPException(status_code=503, detail="Neo4j database is unavailable")
+    except AuthError:
+        raise HTTPException(status_code=500, detail="Neo4j authentication failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Neo4j connection failed: {str(e)}")
+
+@router.get("/neo4j/version")
+async def neo4j_version():
+    """Get Neo4j database version information."""
+    try:
+        with get_neo4j_session() as session:
+            result = session.run("CALL dbms.components() YIELD name, versions, edition")
+            record = result.single()
+            
+            return {
+                "status": "success",
+                "database_name": record["name"],
+                "version": record["versions"][0],
+                "edition": record["edition"]
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.get("/neo4j/statistics")
+async def neo4j_statistics():
+    """Get basic statistics about Neo4j database."""
+    try:
+        with get_neo4j_session() as session:
+            # Get node count
+            node_result = session.run("MATCH (n) RETURN count(n) as node_count")
+            node_count = node_result.single()["node_count"]
+            
+            # Get relationship count
+            rel_result = session.run("MATCH ()-[r]->() RETURN count(r) as rel_count")
+            rel_count = rel_result.single()["rel_count"]
+            
+            # Get label information
+            label_result = session.run("""
+                CALL db.labels() YIELD label
+                MATCH (n:`$label`)
+                RETURN label, count(n) as count
+                ORDER BY count DESC
+            """)
+            labels = {record["label"]: record["count"] for record in label_result}
+            
+            return {
+                "status": "success",
+                "node_count": node_count,
+                "relationship_count": rel_count,
+                "labels": labels
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.get("/neo4j/connection-info")
+async def neo4j_connection_info():
+    """Get information about the Neo4j connection pool."""
+    try:
+        driver = Neo4jClient.get_driver()
+        # Neo4j Python driver doesn't expose detailed pool stats like SQLAlchemy
+        # but we can provide basic info
+        return {
+            "status": "success",
+            "connection_active": driver.verify_connectivity(),
+            "uri": driver._pool_config.uri,
+            "max_connection_pool_size": driver._pool_config.max_connection_pool_size,
+            "connection_timeout": driver._pool_config.connection_acquisition_timeout,
+            "connection_lifetime": driver._pool_config.max_connection_lifetime
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.get("/neo4j/query-test")
+async def neo4j_query_test():
+    """Run a sample query to test Neo4j performance."""
+    start_time = time.time()
+    try:
+        with get_neo4j_session() as session:
+            # Simple test query
+            result = session.run("""
+                UNWIND range(1, 1000) AS number
+                RETURN sum(number) AS sum, min(number) AS min, max(number) AS max
+            """)
+            record = result.single()
+            
+            query_time = time.time() - start_time
+            
+            return {
+                "status": "success",
+                "query_time_ms": round(query_time * 1000, 2),
+                "results": {
+                    "sum": record["sum"],
+                    "min": record["min"],
+                    "max": record["max"]
+                }
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+</file>
+
+<file path="app/api/endpoints/ollama_test.py">
+from fastapi import APIRouter
+import httpx
+import asyncio
+import os
+
+router = APIRouter(prefix="/ollama-test", tags=["ollama-test"])
+
+@router.get("/connectivity")
+async def test_ollama_connectivity():
+    """Test basic connectivity to Ollama from Docker container"""
+    
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    
+    results = {
+        "base_url": base_url,
+        "tests": {}
+    }
+    
+    # Test 1: Basic connectivity
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{base_url}/api/tags")
+            results["tests"]["api_tags"] = {
+                "status": "success" if response.status_code == 200 else "failed",
+                "status_code": response.status_code,
+                "response_size": len(response.content) if response.content else 0
+            }
+            
+            if response.status_code == 200:
+                data = response.json()
+                results["tests"]["api_tags"]["models"] = data.get("models", [])
+                results["tests"]["api_tags"]["model_count"] = len(data.get("models", []))
+    except Exception as e:
+        results["tests"]["api_tags"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Test 2: Version info
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{base_url}/api/version")
+            results["tests"]["version"] = {
+                "status": "success" if response.status_code == 200 else "failed",
+                "status_code": response.status_code,
+                "data": response.json() if response.status_code == 200 else response.text
+            }
+    except Exception as e:
+        results["tests"]["version"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Test 3: Simple generation test
+    try:
+        model = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{base_url}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": "Hello! Just say 'Hi' back.",
+                    "stream": False
+                }
+            )
+            results["tests"]["generate"] = {
+                "status": "success" if response.status_code == 200 else "failed",
+                "status_code": response.status_code,
+                "model_used": model
+            }
+            
+            if response.status_code == 200:
+                data = response.json()
+                results["tests"]["generate"]["response_preview"] = data.get("response", "")[:100]
+    except Exception as e:
+        results["tests"]["generate"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    return results
+
+@router.get("/network-debug")
+async def network_debug():
+    """Debug network connectivity options"""
+    
+    urls_to_test = [
+        "http://host.docker.internal:11434",
+        "http://localhost:11434",
+        "http://127.0.0.1:11434",
+        "http://172.17.0.1:11434",  # Default Docker bridge
+        "http://192.168.65.2:11434",  # Docker Desktop on Mac
+        "http://10.0.2.2:11434"      # Some virtualization setups
+    ]
+    
+    results = {}
+    
+    for url in urls_to_test:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{url}/api/tags")
+                results[url] = {
+                    "status": "reachable",
+                    "status_code": response.status_code,
+                    "response_time_ms": response.elapsed.total_seconds() * 1000
+                }
+        except httpx.ConnectTimeout:
+            results[url] = {"status": "timeout"}
+        except httpx.ConnectError:
+            results[url] = {"status": "connection_refused"}
+        except Exception as e:
+            results[url] = {"status": "error", "error": str(e)}
+    
+    return {
+        "tested_urls": urls_to_test,
+        "results": results,
+        "recommendation": "Use the first URL that shows 'reachable' status"
+    }
+
+@router.get("/environment")
+async def show_environment():
+    """Show relevant environment variables"""
+    
+    env_vars = {}
+    relevant_vars = [
+        "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT",
+        "OLLAMA_API_KEY", "HOSTNAME", "HOST"
+    ]
+    
+    for var in relevant_vars:
+        env_vars[var] = os.getenv(var, "NOT_SET")
+    
+    return {
+        "environment_variables": env_vars,
+        "container_hostname": os.getenv("HOSTNAME", "unknown"),
+        "current_working_dir": os.getcwd()
+    }
+</file>
+
+<file path="app/core/database.py">
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping= True,
+    echo=settings.DEBUG
+)
+
+SessionLocal = sessionmaker(
+    autocommit= False, 
+    autoflush= False, 
+    bind=engine
+)
+
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        
+def get_raw_connection():
+    return engine.connect()
+</file>
+
+<file path="app/core/neo_database.py">
+from neo4j import GraphDatabase
+from app.core.config import settings
+from contextlib import contextmanager
+
+class Neo4jClient:
+    _driver = None
+
+    @classmethod
+    def get_driver(cls):
+        if cls._driver is None:
+            cls._driver = GraphDatabase.driver(
+                settings.NEO4J_URI,
+                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+                max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
+                max_connection_pool_size=settings.NEO4J_MAX_CONNECTION_POOL_SIZE,
+                connection_acquisition_timeout=settings.NEO4J_CONNECTION_TIMEOUT
+            )
+        return cls._driver
+
+    @classmethod
+    def close_driver(cls):
+        if cls._driver is not None:
+            cls._driver.close()
+            cls._driver = None
+
+@contextmanager
+def get_neo4j_session():
+    """Provide a transactional scope around a series of operations."""
+    driver = Neo4jClient.get_driver()
+    session = driver.session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+def get_neo4j_read_session():
+    """Get a read session for Neo4j database."""
+    driver = Neo4jClient.get_driver()
+    return driver.session(database=settings.NEO4J_DATABASE, access_mode="READ")
+
+def get_neo4j_write_session():
+    """Get a write session for Neo4j database."""
+    driver = Neo4jClient.get_driver()
+    return driver.session(database=settings.NEO4J_DATABASE, access_mode="WRITE")
+</file>
+
+<file path="app/schemas/events.py">
+from pydantic import BaseModel, Field
+from datetime import datetime
+from uuid import UUID
+from typing import Dict
+
+class EventBase(BaseModel):
+    event_type: str
+    user_id: str | None = None
+    session_id: str | None = None
+    event_data: Dict[str, any] = {}
+    timestamp: datetime = Field(default_factory=datetime.now)
+    
+    class Config:
+        arbitrary_types_allowed=True
+</file>
+
+<file path="app/utils/pydantic_models/graph.py">
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field
+
+class Position(BaseModel):
+    x: float = Field(..., description="X coordinate")
+    y: float = Field(..., description="Y coordinate")
+
+
+class Arrows(BaseModel):
+    to: dict = Field(default_factory=lambda: {"enabled": True})
+
+
+class Node(BaseModel):
+    id: str = Field(..., description="Unique node identifier")
+    label: str = Field(..., description="Node label/name")
+    group: Literal["task", "start_event", "end_event", "gateway", "data_object"] = Field(
+        ..., description="Node type category"
+    )
+    x: Optional[float] = Field(None, description="X position")
+    y: Optional[float] = Field(None, description="Y position")
+    elementType: Optional[str] = Field(None, description="Specific element type")
+    complexity: Optional[Literal["low", "medium", "high"]] = Field(
+        None, description="Complexity level"
+    )
+    effort: Optional[float] = Field(None, description="Effort estimation")
+    lane: Optional[str] = Field(None, description="Swimming lane assignment")
+    description: str = Field(..., description="Node description")
+
+
+class Edge(BaseModel):
+    id: str = Field(..., description="Unique edge identifier")
+    from_node: str = Field(..., alias="from", description="Source node ID")
+    to_node: str = Field(..., alias="to", description="Target node ID")
+    label: Optional[str] = Field(None, description="Edge label")
+    flowType: Optional[str] = Field(None, description="Type of flow")
+    condition: Optional[str] = Field(None, description="Condition for flow")
+    arrows: Optional[Arrows] = Field(default_factory=Arrows, description="Arrow configuration")
+
+
+class Element(BaseModel):
+    id: str = Field(..., description="Unique element identifier")
+    nodeId: Optional[str] = Field(None, description="Corresponding node ID")
+    type: str = Field(..., description="Element type")
+    label: str = Field(..., description="Element label")
+    position: Position = Field(..., description="Element position")
+    lane: Optional[str] = Field(None, description="Lane assignment")
+    complexity: Optional[str] = Field(None, description="Complexity level")
+    effort: Optional[float] = Field(None, description="Effort estimation")
+    stakeholders: List[str] = Field(default_factory=list, description="Involved stakeholders")
+    dependencies: List[str] = Field(default_factory=list, description="Dependencies")
+    businessValue: Optional[str] = Field(None, description="Business value provided")
+
+
+class Flow(BaseModel):
+    id: str = Field(..., description="Unique flow identifier")
+    edgeId: Optional[str] = Field(None, description="Corresponding edge ID")
+    from_node: str = Field(..., alias="from", description="Source node")
+    to_node: str = Field(..., alias="to", description="Target node")
+    label: Optional[str] = Field(None, description="Flow label")
+    type: Optional[str] = Field(None, description="Flow type")
+    condition: Optional[str] = Field(None, description="Flow condition")
+    dataNeeds: List[str] = Field(default_factory=list, description="Data requirements")
+    integrations: List[str] = Field(default_factory=list, description="Required integrations")
+
+
+class Lane(BaseModel):
+    id: str = Field(..., description="Unique lane identifier")
+    name: str = Field(..., description="Lane name")
+    role: Optional[str] = Field(None, description="Role responsible for lane")
+    skills: List[str] = Field(default_factory=list, description="Required skills")
+    systems: List[str] = Field(default_factory=list, description="Systems used")
+
+
+class Metadata(BaseModel):
+    processName: Optional[str] = Field(None, description="Process name")
+    processType: Optional[str] = Field(None, description="Process type")
+    totalEffort: Optional[float] = Field(None, description="Total effort estimation")
+    stakeholders: List[str] = Field(default_factory=list, description="All stakeholders")
+    objectives: List[str] = Field(default_factory=list, description="Process objectives")
+    risks: List[str] = Field(default_factory=list, description="Identified risks")
+
+
+class ProcessData(BaseModel):
+    nodes: List[Node] = Field(..., description="All process nodes")
+    edges: List[Edge] = Field(..., description="All process edges")
+    elements: List[Element] = Field(..., description="All process elements")
+    flows: List[Flow] = Field(..., description="All process flows")
+    lanes: List[Lane] = Field(default_factory=list, description="Process lanes")
+    metadata: Optional[Metadata] = Field(None, description="Process metadata")
+</file>
+
+<file path="app/utils/pydantic_models/project_details.py">
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field
+
+class IntegrationNeed(BaseModel):
+    system: str = Field(..., description="System to integrate with")
+    type: Literal["api", "database", "file-transfer", "messaging", "other"] = Field(
+        ..., description="Type of integration"
+    )
+    description: str = Field(..., description="Description of integration requirement")
+    data_flow: Optional[Literal["inbound", "outbound", "bidirectional"]] = Field(
+        None, description="Direction of data flow"
+    )
+    critical: Optional[bool] = Field(
+        None, description="Is this integration critical"
+    )
+    complexity: Optional[Literal["high", "medium", "low"]] = Field(
+        None, description="Complexity level (for epics)"
+    )
+    data_elements: Optional[List[str]] = Field(
+        default_factory=list, 
+        description="Specific data fields or objects to be exchanged (for user stories)"
+    )
+
+
+class DevelopmentConsideration(BaseModel):
+    category: Literal[
+        "technical", "architectural", "security", 
+        "performance", "scalability", "maintainability", "testing"
+    ] = Field(..., description="Category of development consideration")
+    consideration: str = Field(..., description="The specific consideration")
+    impact: Literal["high", "medium", "low"] = Field(..., description="Impact level")
+    mitigation: Optional[str] = Field(None, description="Mitigation strategy")
+    effort_impact: Optional[str] = Field(
+        None, description="How this affects development effort (for epics)"
+    )
+    implementation_notes: Optional[str] = Field(
+        None, description="Specific implementation guidance (for user stories)"
+    )
+
+
+class OpenQuestion(BaseModel):
+    question: str = Field(..., description="The question that needs to be answered")
+    category: Literal[
+        "business", "technical", "user-experience", 
+        "integration", "compliance", "other"
+    ] = Field(..., description="Category of the question")
+    priority: Literal["blocking", "high", "medium", "low"] = Field(
+        ..., description="Priority level of the question"
+    )
+    stakeholder: Optional[str] = Field(
+        None, description="Who should answer this question"
+    )
+    context: Optional[str] = Field(
+        None, description="Additional context about the question"
+    )
+    blocks_development: Optional[bool] = Field(
+        None, description="Whether this question must be resolved before development starts (for epics)"
+    )
+    affects_acceptance_criteria: Optional[bool] = Field(
+        None, description="Whether answering this question will change acceptance criteria (for user stories)"
+    )
+
+
+class Epic(BaseModel):
+    id: Optional[str] = Field(None, description="Unique identifier for referencing")
+    title: str = Field(..., description="Epic title")
+    description: str = Field(..., description="Epic description")
+    business_value: str = Field(..., description="Business value delivered by this epic")
+    priority: Optional[Literal["high", "medium", "low"]] = Field(
+        None, description="Epic priority"
+    )
+    estimated_effort: Optional[str] = Field(None, description="Effort estimation")
+    dependencies: List[str] = Field(
+        default_factory=list, description="Dependencies on other epics or components"
+    )
+    integration_needs: List[IntegrationNeed] = Field(
+        default_factory=list, 
+        description="Integration requirements specific to this epic"
+    )
+    dev_considerations: List[DevelopmentConsideration] = Field(
+        default_factory=list,
+        description="Development considerations specific to this epic"
+    )
+    open_questions: List[OpenQuestion] = Field(
+        default_factory=list,
+        description="Questions specific to this epic"
+    )
+
+
+class UserStory(BaseModel):
+    id: Optional[str] = Field(None, description="Story ID if mentioned")
+    title: str = Field(..., description="Title of the user story")
+    user_type: str = Field(..., description="The user persona (As a...)")
+    goal: str = Field(..., description="What the user wants (I want...)")
+    benefit: str = Field(..., description="Why they want it (So that...)")
+    priority: Optional[Literal["high", "medium", "low"]] = Field(
+        None, description="Story priority"
+    )
+    story_points: Optional[int] = Field(None, description="Story point estimation")
+    epic_id: Optional[str] = Field(None, description="ID of the epic this belongs to")
+    epic_title: Optional[str] = Field(
+        None, description="Title of the epic this belongs to"
+    )
+    acceptance_criteria: List[str] = Field(
+        default_factory=list, description="Specific testable criteria"
+    )
+    integration_needs: List[IntegrationNeed] = Field(
+        default_factory=list, 
+        description="Integration requirements specific to this user story"
+    )
+    dev_considerations: List[DevelopmentConsideration] = Field(
+        default_factory=list,
+        description="Development considerations specific to this user story"
+    )
+    open_questions: List[OpenQuestion] = Field(
+        default_factory=list,
+        description="Questions specific to this user story"
+    )
+
+
+class EpicsAndUserStoriesResponse(BaseModel):
+    epics: List[Epic] = Field(..., description="List of generated epics")
+    user_stories: List[UserStory] = Field(
+        default_factory=list, description="List of generated user stories"
+    )
+</file>
+
+<file path="app/utils/pydantic_models/requirements.py">
+from typing import List, Optional, Literal, Dict, Any, Union
+from pydantic import BaseModel, Field
+from datetime import datetime
+from enum import Enum
+
+
+# Enums for better type safety
+class RequirementType(str, Enum):
+    FUNCTIONAL = "functional"
+    NON_FUNCTIONAL = "non_functional"
+    BUSINESS_RULE = "business_rule"
+    DATA_REQUIREMENT = "data_requirement"
+    INTEGRATION = "integration"
+    COMPLIANCE = "compliance"
+    USER_INTERFACE = "user_interface"
+
+
+class RequirementStatus(str, Enum):
+    IDENTIFIED = "identified"
+    ANALYZED = "analyzed" 
+    APPROVED = "approved"
+    IMPLEMENTED = "implemented"
+    TESTED = "tested"
+    DEPLOYED = "deployed"
+
+
+class CodeMigrationStatus(str, Enum):
+    NOT_STARTED = "not_started"
+    IN_ANALYSIS = "in_analysis"
+    MAPPED = "mapped"
+    MIGRATED = "migrated"
+    TESTED = "tested"
+    DEPLOYED = "deployed"
+
+
+class Priority(str, Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class Complexity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very_high"
+
+
+# Core Models
+class BusinessLogicRule(BaseModel):
+    id: str = Field(..., description="Unique identifier for the business rule")
+    name: str = Field(..., description="Business rule name")
+    description: str = Field(..., description="Detailed description of the rule")
+    category: str = Field(..., description="Business domain category")
+    conditions: List[str] = Field(default_factory=list, description="When conditions apply")
+    actions: List[str] = Field(default_factory=list, description="What actions are taken")
+    exceptions: List[str] = Field(default_factory=list, description="Exception cases")
+    priority: Priority = Field(default=Priority.MEDIUM, description="Business priority")
+    complexity: Complexity = Field(default=Complexity.MEDIUM, description="Implementation complexity")
+    stakeholders: List[str] = Field(default_factory=list, description="Business stakeholders")
+    source_system: Optional[str] = Field(None, description="Originating system")
+    compliance_requirements: List[str] = Field(default_factory=list, description="Regulatory compliance needs")
+    data_dependencies: List[str] = Field(default_factory=list, description="Required data elements")
+
+
+class LegacyCodeComponent(BaseModel):
+    id: str = Field(..., description="Unique identifier")
+    name: str = Field(..., description="Component name")
+    file_path: str = Field(..., description="File path in legacy system")
+    language: str = Field(..., description="Programming language")
+    lines_of_code: Optional[int] = Field(None, description="Estimated lines of code")
+    functions: List[str] = Field(default_factory=list, description="Key functions/methods")
+    dependencies: List[str] = Field(default_factory=list, description="Dependencies on other components")
+    business_logic_rules: List[str] = Field(default_factory=list, description="Business rule IDs this implements")
+    migration_status: CodeMigrationStatus = Field(default=CodeMigrationStatus.NOT_STARTED)
+    migration_complexity: Complexity = Field(default=Complexity.MEDIUM)
+    migration_effort_days: Optional[float] = Field(None, description="Estimated migration effort in days")
+    technical_debt_level: Literal["low", "medium", "high", "critical"] = Field(
+        default="medium", description="Level of technical debt"
+    )
+    last_modified: Optional[datetime] = Field(None, description="Last modification date")
+    maintainer: Optional[str] = Field(None, description="Current maintainer")
+
+
+class Requirement(BaseModel):
+    id: str = Field(..., description="Unique requirement identifier")
+    title: str = Field(..., description="Requirement title")
+    description: str = Field(..., description="Detailed requirement description")
+    type: RequirementType = Field(..., description="Type of requirement")
+    status: RequirementStatus = Field(default=RequirementStatus.IDENTIFIED)
+    priority: Priority = Field(default=Priority.MEDIUM)
+    complexity: Complexity = Field(default=Complexity.MEDIUM)
+    business_value: str = Field(..., description="Business value this requirement provides")
+    acceptance_criteria: List[str] = Field(default_factory=list, description="Acceptance criteria")
+    business_logic_rules: List[str] = Field(default_factory=list, description="Related business rule IDs")
+    legacy_components: List[str] = Field(default_factory=list, description="Legacy component IDs")
+    stakeholders: List[str] = Field(default_factory=list, description="Requirement stakeholders")
+    source: str = Field(..., description="Source of the requirement (interview, documentation, etc.)")
+    rationale: Optional[str] = Field(None, description="Why this requirement exists")
+    assumptions: List[str] = Field(default_factory=list, description="Assumptions made")
+    constraints: List[str] = Field(default_factory=list, description="Constraints or limitations")
+    risks: List[str] = Field(default_factory=list, description="Associated risks")
+
+
+class DataMapping(BaseModel):
+    id: str = Field(..., description="Unique mapping identifier")
+    source_system: str = Field(..., description="Source system name")
+    source_field: str = Field(..., description="Source field/column name")
+    source_type: str = Field(..., description="Source data type")
+    target_system: str = Field(..., description="Target system name")
+    target_field: str = Field(..., description="Target field/column name") 
+    target_type: str = Field(..., description="Target data type")
+    transformation_rules: List[str] = Field(default_factory=list, description="Data transformation rules")
+    validation_rules: List[str] = Field(default_factory=list, description="Data validation rules")
+    business_logic_rules: List[str] = Field(default_factory=list, description="Related business rule IDs")
+    migration_complexity: Complexity = Field(default=Complexity.MEDIUM)
+    data_volume: Optional[str] = Field(None, description="Expected data volume")
+    quality_concerns: List[str] = Field(default_factory=list, description="Data quality issues")
+
+
+class Traceability(BaseModel):
+    id: str = Field(..., description="Traceability link identifier")
+    from_type: Literal["requirement", "business_rule", "legacy_component", "user_story", "epic"] = Field(
+        ..., description="Source artifact type"
+    )
+    from_id: str = Field(..., description="Source artifact ID")
+    to_type: Literal["requirement", "business_rule", "legacy_component", "user_story", "epic"] = Field(
+        ..., description="Target artifact type"
+    )
+    to_id: str = Field(..., description="Target artifact ID")
+    relationship: Literal["implements", "depends_on", "derives_from", "tests", "replaces", "enhances"] = Field(
+        ..., description="Type of relationship"
+    )
+    confidence: Literal["high", "medium", "low"] = Field(
+        default="medium", description="Confidence in this relationship"
+    )
+    notes: Optional[str] = Field(None, description="Additional notes about the relationship")
+
+
+class GapAnalysis(BaseModel):
+    id: str = Field(..., description="Gap analysis identifier")
+    title: str = Field(..., description="Gap analysis title")
+    description: str = Field(..., description="Description of the gap")
+    gap_type: Literal["functionality", "performance", "security", "compliance", "usability", "integration"] = Field(
+        ..., description="Type of gap identified"
+    )
+    current_state: str = Field(..., description="Current state description")
+    desired_state: str = Field(..., description="Desired future state")
+    impact: Literal["critical", "high", "medium", "low"] = Field(
+        default="medium", description="Impact of not addressing the gap"
+    )
+    effort_to_close: Complexity = Field(default=Complexity.MEDIUM, description="Effort to close the gap")
+    affected_requirements: List[str] = Field(default_factory=list, description="Affected requirement IDs")
+    affected_components: List[str] = Field(default_factory=list, description="Affected legacy component IDs")
+    proposed_solutions: List[str] = Field(default_factory=list, description="Proposed solutions")
+    risks_if_not_addressed: List[str] = Field(default_factory=list, description="Risks if gap not closed")
+
+
+# Aggregation Models
+class RequirementsPackage(BaseModel):
+    id: str = Field(..., description="Package identifier")
+    name: str = Field(..., description="Package name")
+    description: str = Field(..., description="Package description")
+    business_logic_rules: List[BusinessLogicRule] = Field(default_factory=list)
+    legacy_components: List[LegacyCodeComponent] = Field(default_factory=list)
+    requirements: List[Requirement] = Field(default_factory=list)
+    data_mappings: List[DataMapping] = Field(default_factory=list)
+    traceability_links: List[Traceability] = Field(default_factory=list)
+    gap_analyses: List[GapAnalysis] = Field(default_factory=list)
+    created_date: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=datetime.now)
+    version: str = Field(default="1.0", description="Package version")
+    stakeholders: List[str] = Field(default_factory=list)
+    project_phase: Literal["discovery", "analysis", "design", "implementation", "testing", "deployment"] = Field(
+        default="discovery", description="Current project phase"
+    )
+
+
+# Epic and User Story Extensions for Traceability
+class Epic(BaseModel):
+    id: str = Field(..., description="Epic identifier")
+    title: str = Field(..., description="Epic title")
+    description: str = Field(..., description="Epic description")
+    business_value: str = Field(..., description="Business value")
+    priority: Priority = Field(default=Priority.MEDIUM)
+    status: Literal["backlog", "in_progress", "done"] = Field(default="backlog")
+    requirements: List[str] = Field(default_factory=list, description="Requirement IDs")
+    business_logic_rules: List[str] = Field(default_factory=list, description="Business rule IDs")
+    estimated_effort_days: Optional[float] = Field(None, description="Effort estimation")
+    dependencies: List[str] = Field(default_factory=list, description="Dependent epic IDs")
+
+
+class UserStory(BaseModel):
+    id: str = Field(..., description="User story identifier")
+    title: str = Field(..., description="User story title")
+    description: str = Field(..., description="User story description")
+    user_type: str = Field(..., description="User persona")
+    goal: str = Field(..., description="What user wants")
+    benefit: str = Field(..., description="Why they want it")
+    epic_id: Optional[str] = Field(None, description="Parent epic ID")
+    priority: Priority = Field(default=Priority.MEDIUM)
+    story_points: Optional[int] = Field(None, description="Story point estimation")
+    acceptance_criteria: List[str] = Field(default_factory=list)
+    requirements: List[str] = Field(default_factory=list, description="Requirement IDs")
+    business_logic_rules: List[str] = Field(default_factory=list, description="Business rule IDs")
+    legacy_components: List[str] = Field(default_factory=list, description="Legacy component IDs")
+    status: Literal["backlog", "in_progress", "testing", "done"] = Field(default="backlog")
+
+
+# Analysis and Reporting Models
+class RequirementCoverage(BaseModel):
+    requirement_id: str
+    covered_by_user_stories: List[str] = Field(default_factory=list)
+    covered_by_epics: List[str] = Field(default_factory=list)
+    coverage_percentage: float = Field(default=0.0, description="Percentage covered")
+    gaps: List[str] = Field(default_factory=list, description="Coverage gaps")
+
+
+class MigrationProgress(BaseModel):
+    total_components: int
+    components_by_status: Dict[CodeMigrationStatus, int] = Field(default_factory=dict)
+    total_estimated_days: float = Field(default=0.0)
+    completed_days: float = Field(default=0.0)
+    progress_percentage: float = Field(default=0.0)
+    at_risk_components: List[str] = Field(default_factory=list)
+    blocked_components: List[str] = Field(default_factory=list)
+
+
+# Utility Functions
+def create_traceability_link(
+    from_type: str, from_id: str, 
+    to_type: str, to_id: str, 
+    relationship: str,
+    confidence: str = "medium",
+    notes: Optional[str] = None
+) -> Traceability:
+    """Helper function to create traceability links."""
+    return Traceability(
+        id=f"{from_type}_{from_id}_to_{to_type}_{to_id}",
+        from_type=from_type,
+        from_id=from_id,
+        to_type=to_type,
+        to_id=to_id,
+        relationship=relationship,
+        confidence=confidence,
+        notes=notes
+    )
+
+
+def calculate_requirement_coverage(
+    requirements: List[Requirement],
+    user_stories: List[UserStory],
+    epics: List[Epic]
+) -> List[RequirementCoverage]:
+    """Calculate coverage of requirements by user stories and epics."""
+    coverage_list = []
+    
+    for req in requirements:
+        coverage = RequirementCoverage(requirement_id=req.id)
+        
+        # Find user stories covering this requirement
+        for story in user_stories:
+            if req.id in story.requirements:
+                coverage.covered_by_user_stories.append(story.id)
+        
+        # Find epics covering this requirement  
+        for epic in epics:
+            if req.id in epic.requirements:
+                coverage.covered_by_epics.append(epic.id)
+        
+        # Calculate coverage percentage (simple heuristic)
+        total_coverage_items = len(coverage.covered_by_user_stories) + len(coverage.covered_by_epics)
+        coverage.coverage_percentage = min(100.0, total_coverage_items * 25.0)  # Rough estimate
+        
+        if coverage.coverage_percentage < 100.0:
+            coverage.gaps.append(f"Only {coverage.coverage_percentage}% covered")
+        
+        coverage_list.append(coverage)
+    
+    return coverage_list
+</file>
+
+<file path="app/utils/device_utils.py">
+import torch
+from typing import Tuple
+
+def get_device() -> str:
+    """
+    Automatically detect the best available device for PyTorch operations.
+    
+    Returns:
+        str: Device string - 'cuda', 'mps', or 'cpu'
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():  # Mac M1/M2
+        return "mps"
+    else:
+        return "cpu"
+
+def get_device_and_dtype() -> Tuple[str, torch.dtype]:
+    """
+    Get device and appropriate dtype for that device.
+    
+    Returns:
+        Tuple[str, torch.dtype]: Device and recommended dtype
+    """
+    device = get_device()
+    
+    if device == "cuda":
+        dtype = torch.bfloat16
+    elif device == "mps":
+        dtype = torch.float16  # MPS doesn't support bfloat16
+    else:
+        dtype = torch.float32  # CPU fallback
+    
+    return device, dtype
+
+def get_device_info() -> dict:
+    """
+    Get comprehensive device information.
+    
+    Returns:
+        dict: Device information including capabilities
+    """
+    device = get_device()
+    info = {
+        "device": device,
+        "cuda_available": torch.cuda.is_available(),
+        "mps_available": torch.backends.mps.is_available(),
+    }
+    
+    if device == "cuda":
+        info.update({
+            "cuda_version": torch.version.cuda,
+            "gpu_count": torch.cuda.device_count(),
+            "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+        })
+    
+    return info
+</file>
+
+<file path="migrations/versions/cfcfebbb11ac_create_kafka_event_logs_table.py">
+"""create kafka event logs table
+
+Revision ID: cfcfebbb11ac
+Revises: 
+Create Date: 2025-08-24 18:12:44.756958
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'cfcfebbb11ac'
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('kafka_event_logs',
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('event_type', sa.String(length=255), nullable=False),
+    sa.Column('user_id', sa.String(length=255), nullable=True),
+    sa.Column('topic_name', sa.String(length=255), nullable=False),
+    sa.Column('topic_message', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('kafka_event_logs')
+    # ### end Alembic commands ###
+</file>
+
+<file path="migrations/env.py">
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+
+from alembic import context
+from app.core.config import settings
+from app.core.database import Base
+from app.models.events import KafkaEventLog
+
+
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
+
+# Interpret the config file for Python logging.
+# This line sets up loggers basically.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# add your model's MetaData object here
+# for 'autogenerate' support
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
+target_metadata = Base.metadata
+
+# other values from the config, defined by the needs of env.py,
+# can be acquired:
+# my_important_option = config.get_main_option("my_important_option")
+# ... etc.
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode.
+
+    This configures the context with just a URL
+    and not an Engine, though an Engine is acceptable
+    here as well.  By skipping the Engine creation
+    we don't even need a DBAPI to be available.
+
+    Calls to context.execute() here emit the given string to the
+    script output.
+
+    """
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=settings.DATABASE_URL,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context.
+
+    """
+    
+    configuration = {  
+        'sqlalchemy.url':settings.DATABASE_URL
+    }
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+</file>
+
+<file path="migrations/README">
+Generic single-database configuration.
+</file>
+
+<file path="migrations/script.py.mako">
+"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+# revision identifiers, used by Alembic.
+revision: str = ${repr(up_revision)}
+down_revision: Union[str, Sequence[str], None] = ${repr(down_revision)}
+branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
+depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    ${downgrades if downgrades else "pass"}
+</file>
+
+<file path="alembic.ini">
+# A generic, single database configuration.
+
+[alembic]
+# path to migration scripts.
+# this is typically a path given in POSIX (e.g. forward slashes)
+# format, relative to the token %(here)s which refers to the location of this
+# ini file
+script_location = %(here)s/migrations
+
+# template used to generate migration file names; The default value is %%(rev)s_%%(slug)s
+# Uncomment the line below if you want the files to be prepended with date and time
+# see https://alembic.sqlalchemy.org/en/latest/tutorial.html#editing-the-ini-file
+# for all available tokens
+# file_template = %%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s
+
+# sys.path path, will be prepended to sys.path if present.
+# defaults to the current working directory.  for multiple paths, the path separator
+# is defined by "path_separator" below.
+prepend_sys_path = .
+
+
+# timezone to use when rendering the date within the migration file
+# as well as the filename.
+# If specified, requires the python>=3.9 or backports.zoneinfo library and tzdata library.
+# Any required deps can installed by adding `alembic[tz]` to the pip requirements
+# string value is passed to ZoneInfo()
+# leave blank for localtime
+# timezone =
+
+# max length of characters to apply to the "slug" field
+# truncate_slug_length = 40
+
+# set to 'true' to run the environment during
+# the 'revision' command, regardless of autogenerate
+# revision_environment = false
+
+# set to 'true' to allow .pyc and .pyo files without
+# a source .py file to be detected as revisions in the
+# versions/ directory
+# sourceless = false
+
+# version location specification; This defaults
+# to <script_location>/versions.  When using multiple version
+# directories, initial revisions must be specified with --version-path.
+# The path separator used here should be the separator specified by "path_separator"
+# below.
+# version_locations = %(here)s/bar:%(here)s/bat:%(here)s/alembic/versions
+
+# path_separator; This indicates what character is used to split lists of file
+# paths, including version_locations and prepend_sys_path within configparser
+# files such as alembic.ini.
+# The default rendered in new alembic.ini files is "os", which uses os.pathsep
+# to provide os-dependent path splitting.
+#
+# Note that in order to support legacy alembic.ini files, this default does NOT
+# take place if path_separator is not present in alembic.ini.  If this
+# option is omitted entirely, fallback logic is as follows:
+#
+# 1. Parsing of the version_locations option falls back to using the legacy
+#    "version_path_separator" key, which if absent then falls back to the legacy
+#    behavior of splitting on spaces and/or commas.
+# 2. Parsing of the prepend_sys_path option falls back to the legacy
+#    behavior of splitting on spaces, commas, or colons.
+#
+# Valid values for path_separator are:
+#
+# path_separator = :
+# path_separator = ;
+# path_separator = space
+# path_separator = newline
+#
+# Use os.pathsep. Default configuration used for new projects.
+path_separator = os
+
+# set to 'true' to search source files recursively
+# in each "version_locations" directory
+# new in Alembic version 1.10
+# recursive_version_locations = false
+
+# the output encoding used when revision files
+# are written from script.py.mako
+# output_encoding = utf-8
+
+# database URL.  This is consumed by the user-maintained env.py script only.
+# other means of configuring database URLs may be customized within the env.py
+# file.
+sqlalchemy.url = driver://user:pass@localhost/dbname
+
+
+[post_write_hooks]
+# post_write_hooks defines scripts or Python functions that are run
+# on newly generated revision scripts.  See the documentation for further
+# detail and examples
+
+# format using "black" - use the console_scripts runner, against the "black" entrypoint
+# hooks = black
+# black.type = console_scripts
+# black.entrypoint = black
+# black.options = -l 79 REVISION_SCRIPT_FILENAME
+
+# lint with attempts to fix using "ruff" - use the module runner, against the "ruff" module
+# hooks = ruff
+# ruff.type = module
+# ruff.module = ruff
+# ruff.options = check --fix REVISION_SCRIPT_FILENAME
+
+# Alternatively, use the exec runner to execute a binary found on your PATH
+# hooks = ruff
+# ruff.type = exec
+# ruff.executable = ruff
+# ruff.options = check --fix REVISION_SCRIPT_FILENAME
+
+# Logging configuration.  This is also consumed by the user-maintained
+# env.py script only.
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARNING
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARNING
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+</file>
+
+<file path="Dockerfile">
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements files
+COPY pyproject.toml uv.lock ./
+
+# Install uv and dependencies
+RUN pip install uv
+RUN uv sync --frozen
+
+# Copy application code
+COPY . .
+
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+# Expose port
+EXPOSE 8000
+
+# Run the application
+ENTRYPOINT ["/startup.sh"]
+</file>
+
+<file path="app/utils/ollama/ollama_config.py">
+from openai import OpenAI
+from app.core.config import settings
+
+client = OpenAI(
+    base_url=settings.OLLAMA_BASE_URL,
+    api_key="buttstuff"
+)
+
+model: str = "gpt-oss:20b"
+</file>
+
+<file path="app/utils/ollama/ollama_functions.py">
+from .ollama_config import client
+
+def call_model(msg: str, role:str ="user" ,model: str = "gpt-oss:20b"):
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+             {"role": role,"content": msg}]
+    )
+    return response
+</file>
+
+<file path="startup.sh">
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Data API Collector..."
+
+# Wait for database to be ready
+echo "⏳ Waiting for PostgreSQL to be ready..."
+while ! nc -z postgres 5432; do
+  sleep 1
+done
+echo "✅ PostgreSQL is ready!"
+
+# Run database migrations
+echo "🔄 Running database migrations..."
+uv run alembic upgrade head
+echo "✅ Database migrations completed!"
+
+# Start the application
+echo "🚀 Starting FastAPI application..."
+exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+</file>
+
+<file path="app/api/endpoints/kafka.py">
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.config import settings
+from confluent_kafka import Producer, Consumer
+from app.models.events import KafkaMessage, KafkaEventLog
+
+
+router = APIRouter(prefix="/kafka", tags=["kafka"])
+
+producer = Producer({'bootstrap.servers': settings.KAFKA_BOOTSTRAP_SERVERS})
+consumer = Consumer({'bootstrap.servers':settings.KAFKA_BOOTSTRAP_SERVERS, 
+                     'group.id':"data-api-collector-test",
+                     'auto.offset.reset':'earliest'})
+ 
+@router.post("/producer/send-message")
+async def kafka_test_produce_message(request: KafkaMessage, db: Session = Depends(get_db)):
+    try:
+        producer.produce(request.topic_name,request.topic_message)        
+        kafka_event = KafkaEventLog(
+            event_type =  "send-message", 
+            user_id = request.source,
+            topic_name = request.topic_name,
+            topic_message = request.topic_message    
+        )
+        db.add(kafka_event)
+        await db.commit()
+        return {"status": "success", "topic": request.topic_name, "message": request.topic_message}
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+     
+@router.post("/producer/send-message_old_flush")
+async def kafka_test_produce_message_old(request: KafkaMessage, db: Session = Depends(get_db)):
+    try:
+        kafka_event = KafkaEventLog(
+            event_type =  "send-message", 
+            user_id = request.source,
+            topic_name = request.topic_name,
+            topic_message = request.topic_message    
+        )
+        db.add(kafka_event)
+        db.commit()
+        producer.produce(request.topic_name,request.topic_message)
+        producer.flush() 
+        return {"status": "success", "topic": request.topic_name, "message": request.topic_message}
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+    
+@router.get("/consume/consume-message")
+async def kafka_test_consume_message(topic_name: str, message_limit: int = 5):
+    try:
+        messages = []
+        consumer.subscribe([topic_name])
+        for i in range (message_limit):
+            msg = consumer.poll(timeout = 1.0)
+            if msg is None:
+                continue
+            if msg.error():
+                messages.append({"error":str(msg.error())})
+            else:
+                messages.append({
+                    "topic":msg.topic(),
+                    "partition": msg.partition(),
+                    "offset": msg.offset(),
+                    "value": msg.value()
+                })
+        return {"status": "success", "messages": messages}
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+     
+@router.get("/events")
+async def get_kafka_events(
+    skip: int = 0,
+    limit: int = 100,
+    topic_name: str = None,
+    user_id: str = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(KafkaEventLog)
+    
+    # Apply filters if provided
+    if topic_name:
+        query = query.filter(KafkaEventLog.topic_name == topic_name)
+    if user_id:
+        query = query.filter(KafkaEventLog.user_id == user_id)
+    
+    # Order by most recent first
+    query = query.order_by(KafkaEventLog.created_at.desc())
+    
+    # Get total count before applying limit
+    total_count = query.count()
+    
+    # Apply pagination
+    events = query.offset(skip).limit(limit).all()
+    
+    return {
+        "total": total_count,
+        "events": [
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "user_id": event.user_id,
+                "topic_name": event.topic_name,
+                "message": event.topic_message,
+                "timestamp": event.created_at.isoformat() if event.created_at else None
+            }
+            for event in events
+        ]
+    }
+</file>
+
+<file path="app/api/endpoints/redis.py">
+import json
+from fastapi import APIRouter
+from app.core.config import settings
+import redis
+from app.models.events import RedisReq
+
+
+router = APIRouter(prefix="/redis", tags=["redis"])
+redis_r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+@router.get("/test")
+async def test_redis():
+    try:
+        redis_r.set('test_key','Hello from FastAPI')
+        value = redis_r.get('test_key')
+        info = redis_r.info()
+        return {
+            "status": "success",
+            "message": str(value),
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+     
+@router.post("/set")
+async def set_redis(request: RedisReq):
+    try:
+        if isinstance(request.value, (dict, list, tuple)):
+            serialized_value = json.dumps(request.value)
+        else:
+            # For primitive types, convert to string if needed
+            serialized_value = request.value
+        redis_r.set(request.key_store,serialized_value)
+        info = redis_r.info()
+        return {
+            "status": "success",
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+
+@router.get("/get")
+async def get_redis(key_store: str):
+    try:
+        value = redis_r.get(key_store)
+        info = redis_r.info()
+        return {
+            "status": "success",
+            "message": str(value),
+            "version": info["redis_version"],
+            "connected_clients": info["connected_clients"],
+            "used_memory_human": info["used_memory_human"]
+        }
+    except Exception as e:
+         return {"status":"error", "message":str(e)}
+</file>
+
+<file path=".env.example">
+# Database
+POSTGRES_SERVER=localhost
+POSTGRES_USER=dataapi
+POSTGRES_PASSWORD=dataapi123
+POSTGRES_DB=data_collector
+DATABASE_URL=postgresql://dataapi:dataapi123@localhost/data_collector
+POSTGRES_PORT=5432
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Kafka
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+# API
+API_V1_STR=/api/v1
+PROJECT_NAME=Data API Collector
+DEBUG=true
+
+# Security
+SECRET_KEY=your-secret-key-change-this-in-production
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# GraphDB
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
+NEO4J_URI=bolt://data-api-neo4j:7687
+NEO4J_MAX_CONNECTION_LIFETIME=3600
+NEO4J_MAX_CONNECTION_POOL_SIZE=10
+NEO4J_CONNECTION_TIMEOUT=30
+NEO4J_DATABASE=neo4j
+
+
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_API_KEY=ollama
+</file>
+
+<file path="app/api/endpoints/data_sources.py">
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.core.database import get_db, engine
+from app.core.config import settings
+
+
+router = APIRouter(prefix="/data-sources", tags=["data-sources"])
+
+
+@router.get("/orm")
+async def test_orm_connection(db: Session = Depends(get_db)):
+    try:
+        result = db.execute(text("SELECT version() as db_version"))
+        row = result.fetchone()
+        return {
+            "status" : "success",
+            "connection_type" : "SQLAlchemy ORM",
+            "database_version": row.db_version
+        }
+    except Exception as e:
+        return {"status":"error", "message":str(e)}
+    
+@router.get("/raw/sql")
+async def test_raw_sql():
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT current_database() as current_db, now() as current_time"))
+            row = result.fetchone()
+            return {
+                "status":"Success",
+                "connection_type":"Raw SQL",
+                "current_database":row.current_db,
+                "current_time": str(row.current_time)
+            }
+    except Exception as e:
+         return {"status":"error", "message":str(e)} 
+     
+     
+@router.get("/connection-info")
+async def connection_info():
+    pool = engine.pool
+    return {
+        "pool_size": pool.size(),
+        "checked_in_connections": pool.checkedin(),
+        "checked_out_connections": pool.checkedout(),
+        "total_connections": pool.size() + pool.checkedout()
+    }
+</file>
+
+<file path="app/models/events.py">
+from typing import Any
+from pydantic import BaseModel
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.sql import func
+
+from app.core.database import Base
+
+class RedisReq(BaseModel):
+    key_store: str
+    value: Any
+    
+    class Config:
+        arbitrary_types_allowed = True        
+        json_schema_extra = {
+            "example": {
+                "key_store": "example_key",
+                "value": [1, "string", {"nested": "object"}]
+            }
+        }
+    
+class KafkaMessage(BaseModel):
+    topic_name: str
+    topic_message: str
+    source: str
+    
+class KafkaEventLog(Base):
+    __tablename__ = "kafka_event_logs"
+    
+    id = Column(Integer, primary_key = True, autoincrement=True)
+    event_type = Column(String(255), nullable=False)
+    user_id = Column(String(255))
+    topic_name = Column(String(255), nullable=False)
+    topic_message = Column(Text)
+    created_at = Column(DateTime, default= func.now())
+    
+    
+    def __repr__(self):
+        return f"<KafkaEventLog(id={self.id}, topic={self.topic_name}, event_type={self.event_type})>"
+</file>
+
+<file path="app/api/endpoints/__init__.py">
+from fastapi import APIRouter
+from .data_sources import router as data_sources_router
+from .kafka import router as kafka_router
+from .redis import router as redis_router
+from .neo4j import router as neo_data_sources_router
+from .llms import router as llm_router
+from .ollama_test import router as ollama_test_router
+from .multimodal_ocr import router as multimodal_router
+# Create main router that combines all endpoint routers
+router = APIRouter(prefix="/api/v1")
+
+# Include all the individual routers
+router.include_router(data_sources_router)
+router.include_router(neo_data_sources_router)
+router.include_router(kafka_router)
+router.include_router(redis_router)
+router.include_router(llm_router)
+router.include_router(ollama_test_router)
+router.include_router(multimodal_router)
+
+
+
+__all__ = ["router"]
+</file>
+
+<file path="app/core/config.py">
+from re import S
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+from redis.utils import C
+
+class Settings(BaseSettings):
+    
+    POSTGRES_SERVER: str
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str 
+    POSTGRES_DB: str
+    DATABASE_URL: str
+    POSTGRES_PORT: str
+    
+    NEO4J_URI: str
+    NEO4J_USER: str
+    NEO4J_PASSWORD: str
+    NEO4J_MAX_CONNECTION_LIFETIME: int
+    NEO4J_MAX_CONNECTION_POOL_SIZE: int
+    NEO4J_CONNECTION_TIMEOUT: int
+    NEO4J_DATABASE: str
+    
+    
+    DEBUG: bool = False
+    PROJECT_NAME: str = "Data API Collector"
+    REDIS_URL: str
+    KAFKA_BOOTSTRAP_SERVERS: str
+    API_V1_STR: str
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: str
+    
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_API_KEY: str = "ollama"
+
+    POSTGRES_PORT_EXTERNAL: str
+    REDIS_PORT_EXTERNAL: str
+    CADDY_HTTP_PORT: str
+    CADDY_HTTPS_PORT: str
+
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+        
+
+settings = Settings()
+</file>
+
+<file path=".gitignore">
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+!.env.example
+api-key.json
+!api-key.json.example
+repomix-output.txt
+
+migrations/__pycache__/
+migrations/versions/__pycache__/
+*.pyc
+*.pyo
+*~
+*.swp
+.python-version
+.DS_Store
+elastic_data
+kafka_data
+huggingface_cache/
+</file>
+
+<file path="app/main.py">
+# main.py - Parent directory main application
+from fastapi import FastAPI
+from app.core.config import settings
+
+# Import routers from child directory
+from app.api.endpoints import router as api_router
+
+# Create main application
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    debug=settings.DEBUG,
+    version="1.0.0",
+    description="Data API with multiple service integrations",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Include routers
+app.include_router(api_router)
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "message": "Data API is running",
+        "version": "1.0.0",
+        "services": ["data-sources", "kafka", "redis"],
+        "documentation": "/docs",
+        "endpoints": {
+            "data_sources": "/data-sources/*",
+            "kafka": "/kafka/*", 
+            "redis": "/redis/*"
+        }
+    }
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy", 
+        "service": "data-api",
+        "version": "1.0.0"
+    }
+</file>
+
+<file path="pyproject.toml">
+[project]
+name = "data-api-collector"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "accelerate>=1.10.1",
+    "alembic>=1.16.4",
+    "confluent-kafka>=2.11.1",
+    "datasets>=4.0.0",
+    "dotenv>=0.9.9",
+    "fastapi[standard]>=0.116.1",
+    "langchain>=0.3.27",
+    "langgraph>=0.6.7",
+    "neo4j>=5.28.2",
+    "numpy>=2.3.3",
+    "openai>=1.107.0",
+    "polars>=1.33.1",
+    "psycopg[binary]>=3.2.9",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "pyspark>=4.0.1",
+    "redis>=6.4.0",
+    "scikit-learn>=1.7.2",
+    "sentence-transformers>=5.1.0",
+    "sqlalchemy>=2.0.43",
+    "tokenizers>=0.22.0",
+    "torch>=2.8.0",
+    "torchaudio>=2.8.0",
+    "torchvision>=0.23.0",
+    "transformers>=4.56.1",
+]
+
+[tool.uv.workspace]
+exclude = ["services/*"]
+</file>
+
+<file path="Caddyfile">
+:80 {
+    # Health check endpoint - no auth required
+    handle /health {
+        respond "OK" 200
+    }
+
+    # Protected test endpoints - require API key
+    handle /api/* {
+        @unauthorized {
+            not header X-Api-Key "{$SECRET_KEY}"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        reverse_proxy app:8000
+    }
+
+    # Protected Elasticsearch endpoints - require API key
+    handle /elasticsearch/* {
+        @unauthorized {
+            not header X-Api-Key "{$SECRET_KEY}"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /elasticsearch
+        reverse_proxy data-api-elasticsearch:9200
+    }
+
+    handle /neo4j/* {
+        @unauthorized {
+            not header X-Api-Key "{$SECRET_KEY}"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /neo4j
+        reverse_proxy data-api-neo4j:7474
+    }
+
+    handle /neo4j-bolt/* {
+        @unauthorized {
+            not header X-Api-Key "{$SECRET_KEY}"
+        }
+        
+        handle @unauthorized {
+            respond "Unauthorized" 401
+        }
+        
+        uri strip_prefix /neo4j-bolt
+        reverse_proxy data-api-neo4j:7687
+    }
+
+    # Default handler for all other requests (frontend) - no auth required
+    handle /* {
+        reverse_proxy app:8000
+    }
+}
+</file>
+
+<file path="docker-compose.yml">
+services:
+  # ---  core services ---
+  postgres:
+    image: postgres:15
+    container_name: data-api-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT_EXTERNAL:-5432}:${POSTGRES_PORT:-5432}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  elasticsearch:
+    image: elasticsearch:9.1.2
+    container_name: data-api-elasticsearch
+    user: "1000:1000"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:community
+    container_name: data-api-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474" # HTTP Browser interface
+      - "7687:7687" # Bolt protocol
+    environment:
+      # Authentication
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+
+      # Memory settings
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
+
+      # Security and plugins
+      NEO4J_dbms_security_procedures_unrestricted: gds.*,apoc.*
+      NEO4J_dbms_security_procedures_allowlist: gds.*,apoc.*
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+
+      # Logging
+      NEO4J_dbms_logs_debug_level: INFO
+
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+
+    networks:
+      - app-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:8.2.1
+    container_name: data-api-redis
+    ports:
+      - "${REDIS_PORT_EXTERNAL:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.10
+    container_name: data-api-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.10
+    container_name: data-api-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_BOOTSTRAP_SERVERS}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    restart: unless-stopped
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - app-network
+
+  app:
+    build: .
+    container_name: data-api-app
+    depends_on:
+      - postgres
+      - redis
+      - zookeeper
+      - kafka
+      - neo4j
+    environment:
+      POSTGRES_SERVER: ${POSTGRES_SERVER}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      API_V1_STR: ${API_V1_STR}
+      PROJECT_NAME: ${PROJECT_NAME}
+      DEBUG: ${DEBUG}
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_DATABASE: ${NEO4J_DATABASE}
+      NEO4J_MAX_CONNECTION_LIFETIME: ${NEO4J_MAX_CONNECTION_LIFETIME}
+      NEO4J_MAX_CONNECTION_POOL_SIZE: ${NEO4J_MAX_CONNECTION_POOL_SIZE}
+      NEO4J_CONNECTION_TIMEOUT: ${NEO4J_CONNECTION_TIMEOUT}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
+    restart: unless-stopped
+    networks:
+      - app-network
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: data-api-caddy
+    restart: unless-stopped
+    ports:
+      - "${CADDY_HTTP_PORT:-8080}:80"
+      - "${CADDY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./api-keys.json:/etc/caddy/api-keys.json
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - app
+    networks:
+      - app-network
+
+  # ---  other services ---
+  ocr-service:
+    build:
+      context: ./services/ocr_service
+      dockerfile: Dockerfile
+    container_name: ocr-service
+    restart: unless-stopped
+    environment:
+      - HF_HOME=/cache
+    volumes:
+      - ocr_cache:/cache
+    networks:
+      - app-network
+    expose:
+      - "8002"
+    # deploy: # Uncomment for GPU access
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # embedder-service:
+  #   build:
+  #     context: ./services/embedder_service
+  #     dockerfile: dockerfile
+  #   container_name: embedder-service
+  #   restart: unless-stopped
+  #   environment:
+  #     - HF_HOME=/cache
+  #   volumes:
+  #     - embedding_cache:/cache
+  #   networks:
+  #     - app-network
+  #   expose:
+  #     - "8003"
+  # deploy: # Uncomment for GPU access
+  #   resources:
+  #     reservations:
+  #       devices:
+  #         - driver: nvidia
+  #           count: 1
+  #           capabilities: [gpu]
+
+# ---  end services ---
+volumes:
+  postgres_data:
+  redis_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  caddy_data:
+  caddy_config:
+  elastic_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  ocr_cache:
+networks:
+  app-network:
+    driver: bridge
+</file>
+
+</files>
