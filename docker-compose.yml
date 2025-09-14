@@ -182,6 +182,7 @@ services:
     container_name: ocr-service
     restart: unless-stopped
     environment:
+      - MODEL_TYPE=${MODEL_TYPE}
       - HF_HOME=/cache
     volumes:
       - ocr_cache:/cache
