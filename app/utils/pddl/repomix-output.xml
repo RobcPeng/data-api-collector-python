@@ -1,3 +1,59 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+main.py
+pddl_classes.py
+pddl_client.py
+task_builder.py
+task_execution_manager.py
+task_repository.py
+test_demo.py
+workflow_builder.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="main.py">
 import json
 import subprocess
 import tempfile
@@ -1521,3 +1577,1649 @@ if __name__ == "__main__":
             api.close()
         except:
             pass
+</file>
+
+<file path="pddl_classes.py">
+import json
+from numpy import integer
+from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Any, Tuple
+from enum import Enum
+
+
+class TaskStatus(str, Enum):
+    # Initial states
+    PENDING = "pending"
+    QUEUED = "queued"
+    SCHEDULED = "scheduled"
+    READY = "ready"
+    
+    # Active states
+    IN_PROGRESS = "in_progress"
+    RUNNING = "running"
+    PROCESSING = "processing"
+    EXECUTING = "executing"
+    
+    # Waiting states
+    BLOCKED = "blocked"
+    WAITING = "waiting"
+    PAUSED = "paused"
+    SUSPENDED = "suspended"
+    ON_HOLD = "on_hold"
+    
+    # Completion states
+    COMPLETED = "completed"
+    SUCCESS = "success"
+    FINISHED = "finished"
+    
+    # Failure states
+    FAILED = "failed"
+    ERROR = "error"
+    TIMEOUT = "timeout"
+    ABORTED = "aborted"
+    CANCELLED = "cancelled"
+    
+    # Review states
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    
+    # Retry states
+    RETRYING = "retrying"
+    RETRY_PENDING = "retry_pending"
+
+
+class ResourceType(str, Enum):
+    # Human resources
+    DEVELOPER = "developer"
+    QA = "qa"
+    DESIGNER = "designer"
+    PRODUCT_MANAGER = "product_manager"
+    DEVOPS_ENGINEER = "devops_engineer"
+    DATA_SCIENTIST = "data_scientist"
+    SECURITY_ANALYST = "security_analyst"
+    BUSINESS_ANALYST = "business_analyst"
+    
+    # Infrastructure resources
+    DATABASE = "database"
+    CACHE = "cache"
+    MESSAGE_QUEUE = "message_queue"
+    LOAD_BALANCER = "load_balancer"
+    CDN = "cdn"
+    STORAGE = "storage"
+    BACKUP = "backup"
+    
+    # Compute resources
+    COMPUTE = "compute"
+    CPU = "cpu"
+    GPU = "gpu"
+    MEMORY = "memory"
+    CONTAINER = "container"
+    VIRTUAL_MACHINE = "virtual_machine"
+    SERVERLESS_FUNCTION = "serverless_function"
+    
+    # Network resources
+    NETWORK = "network"
+    BANDWIDTH = "bandwidth"
+    VPN = "vpn"
+    FIREWALL = "firewall"
+    DNS = "dns"
+    
+    # Application resources
+    API_ENDPOINT = "api_endpoint"
+    MICROSERVICE = "microservice"
+    WEB_SERVER = "web_server"
+    APPLICATION_SERVER = "application_server"
+    
+    # File and data resources
+    FILE_SYSTEM = "file_system"
+    OBJECT_STORAGE = "object_storage"
+    DATA_WAREHOUSE = "data_warehouse"
+    DATA_LAKE = "data_lake"
+    
+    # External resources
+    THIRD_PARTY_API = "third_party_api"
+    EXTERNAL_SERVICE = "external_service"
+    PAYMENT_GATEWAY = "payment_gateway"
+    
+    # Security resources
+    SSL_CERTIFICATE = "ssl_certificate"
+    SECRET_MANAGER = "secret_manager"
+    AUTHENTICATION_SERVICE = "authentication_service"
+    
+    # Monitoring resources
+    MONITORING_SYSTEM = "monitoring_system"
+    LOGGING_SERVICE = "logging_service"
+    ALERTING_SYSTEM = "alerting_system"
+
+
+class DataType(str, Enum):
+    # Primitive types
+    STRING = "string"
+    INTEGER = "integer"
+    FLOAT = "float"
+    DECIMAL = "decimal"
+    BOOLEAN = "boolean"
+    NULL = "null"
+    
+    # Date and time types
+    DATE = "date"
+    TIME = "time"
+    DATE_TIME = "datetime"
+    TIMESTAMP = "timestamp"
+    TIMEZONE = "timezone"
+    DURATION = "duration"
+    
+    # Structured data types
+    JSON = "json"
+    XML = "xml"
+    YAML = "yaml"
+    CSV = "csv"
+    ARRAY = "array"
+    LIST = "list"
+    DICTIONARY = "dictionary"
+    OBJECT = "object"
+    
+    # File types
+    FILE = "file"
+    BINARY = "binary"
+    TEXT_FILE = "text_file"
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    DOCUMENT = "document"
+    
+    # Document formats
+    PDF = "pdf"
+    WORD_DOC = "word_doc"
+    EXCEL = "excel"
+    POWERPOINT = "powerpoint"
+    HTML = "html"
+    MARKDOWN = "markdown"
+    
+    # Network and web types
+    URL = "url"
+    EMAIL = "email"
+    IP_ADDRESS = "ip_address"
+    MAC_ADDRESS = "mac_address"
+    UUID = "uuid"
+    
+    # Database types
+    DATABASE_RECORD = "database_record"
+    PRIMARY_KEY = "primary_key"
+    FOREIGN_KEY = "foreign_key"
+    BLOB = "blob"
+    CLOB = "clob"
+    
+    # Geographic and location types
+    COORDINATE = "coordinate"
+    LATITUDE = "latitude"
+    LONGITUDE = "longitude"
+    ADDRESS = "address"
+    POSTAL_CODE = "postal_code"
+    
+    # Financial types
+    CURRENCY = "currency"
+    PRICE = "price"
+    PERCENTAGE = "percentage"
+    
+    # Security types
+    PASSWORD = "password"
+    TOKEN = "token"
+    API_KEY = "api_key"
+    ENCRYPTED_DATA = "encrypted_data"
+    HASH = "hash"
+    
+    # Communication types
+    PHONE_NUMBER = "phone_number"
+    MESSAGE = "message"
+    NOTIFICATION = "notification"
+    
+    # Measurement types
+    METRIC = "metric"
+    UNIT_OF_MEASURE = "unit_of_measure"
+    QUANTITY = "quantity"
+    
+    # Custom types
+    REGEX_PATTERN = "regex_pattern"
+    COLOR_CODE = "color_code"
+    VERSION_NUMBER = "version_number"
+    STATUS_CODE = "status_code"
+
+class InputContract(BaseModel):
+    """Defines required inputs for a task"""
+    name: str
+    data_type: DataType
+    required: bool = True
+    validation_rules: List[str] = Field(default_factory=list)
+    example_value: Optional[str] = None
+    description: str = ""
+
+class OutputContract(BaseModel):
+    """Defines expected outputs from a task"""
+    name: str
+    data_type: DataType
+    validation_rules: List[str] = Field(default_factory=list)
+    example_value: Optional[str] = None
+    description: str = ""
+    
+class TaskContract(BaseModel):
+    """Complete input/output contract for a task"""
+    task_id: str
+    inputs: List[InputContract] = Field(default_factory=list)
+    outputs: List[OutputContract] = Field(default_factory=list)
+    preconditions: List[str] = Field(default_factory=list)
+    postconditions: List[str] = Field(default_factory=list)
+    side_effects: List[str] = Field(default_factory=list)
+
+class Task(BaseModel):
+    id: str
+    name: str
+    description: str
+    duration_hours: int = Field(gt=0)
+    dependencies: List[str] = Field(default_factory=list)
+    required_resources: List[str] = Field(default_factory=list)
+    status: TaskStatus = TaskStatus.PENDING
+    contract: TaskContract
+    generated_code: Optional[str] = None
+    execution_environment: str = "python"
+
+class Resource(BaseModel):
+    id: str
+    name: str
+    resource_type: ResourceType
+    available: bool = True
+    capacity: int = Field(default=1, gt=0)
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+class ExecutionContext(BaseModel):
+    """Runtime context for task execution"""
+    task_id: str
+    inputs: Dict[str, Any]
+    outputs: Dict[str, Any] = Field(default_factory=dict)
+    errors: List[str] = Field(default_factory=list)
+    execution_trace: List[str] = Field(default_factory=list)
+    resource_state: Dict[str, Any] = Field(default_factory=dict)
+
+class PlanningState(BaseModel):
+    tasks: Dict[str, Task]
+    resources: Dict[str, Resource]
+    completed_tasks: List[str] = Field(default_factory=list)
+    failed_tasks: List[str] = Field(default_factory=list)
+    current_time: int = Field(default=0, ge=0)
+    available_resources: Optional[List[str]] = None
+    execution_contexts: Dict[str, ExecutionContext] = Field(default_factory=dict)
+    global_state: Dict[str, Any] = Field(default_factory=dict)
+    
+    def model_post_init(self, __context: Any) -> None:
+        if self.available_resources is None:
+            self.available_resources = [r.id for r in self.resources.values() if r.available]
+
+class ValidationResult(BaseModel):
+    is_valid: bool
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    execution_trace: List[str] = Field(default_factory=list)
+    val_output: str = ""
+    contract_violations: List[str] = Field(default_factory=list)
+</file>
+
+<file path="pddl_client.py">
+from app.utils.ollama.ollama_config import client
+from app.utils.ollama.ollama_functions import call_model
+from .pddl_classes import Task
+import re
+
+class ModelClient:
+    """Wrapper for your existing call_model function with contract-aware code generation"""
+    
+    def __init__(self, model: str = "codestral:latest"):
+        self.model = model
+    
+    def generate(self, prompt: str, system_prompt: str = None) -> str:
+        """Generate text using your call_model function"""
+        try: 
+            response = call_model(prompt, role="user", model=self.model, system_prompt = system_prompt)
+            
+            # Extract content from response (adjust based on your response format)
+            if hasattr(response, 'choices') and response.choices:
+                return response.choices[0].message.content.strip()
+            elif hasattr(response, 'content'):
+                return response.content.strip()
+            else:
+                return str(response).strip()
+                
+        except Exception as e:
+            return f"Error: {e}"
+    
+    def generate_code_with_contract(self, task: Task) -> str:
+        """Generate code that enforces the task contract"""
+        
+        # Build input validation
+        input_validation = []
+        for inp in task.contract.inputs:
+            validation_code = f"# Validate {inp.name}: {inp.data_type.value}"
+            if inp.required:
+                validation_code += f"\nassert '{inp.name}' in inputs, 'Required input {inp.name} missing'"
+            for rule in inp.validation_rules:
+                validation_code += f"\n# Rule: {rule}"
+            input_validation.append(validation_code)
+        
+        # Build output specification
+        output_spec = []
+        for out in task.contract.outputs:
+            output_spec.append(f"'{out.name}': {out.data_type.value}  # {out.description}")
+        
+        system_prompt = f"""You are a code generation AI that MUST follow strict contracts.
+
+Generate {task.execution_environment} code for this task:
+- Task: {task.name}
+- Description: {task.description}
+
+CONTRACT REQUIREMENTS (MANDATORY):
+Input Contract:
+{chr(10).join(f"- {inp.name} ({inp.data_type.value}): {inp.description}" for inp in task.contract.inputs)}
+
+Output Contract:
+{chr(10).join(f"- {out.name} ({out.data_type.value}): {out.description}" for out in task.contract.outputs)}
+
+Preconditions:
+{chr(10).join(f"- {pre}" for pre in task.contract.preconditions)}
+
+Postconditions:
+{chr(10).join(f"- {post}" for post in task.contract.postconditions)}
+
+CRITICAL RULES:
+1. Function MUST accept inputs dict and return outputs dict
+2. Validate ALL required inputs exist and have correct types
+3. Generate ALL specified outputs with correct types
+4. Raise clear exceptions if preconditions not met
+5. Ensure postconditions are satisfied before returning
+6. Add comprehensive error handling
+7. Include type hints and docstrings
+8. Make the function completely self-contained (black box)
+
+Generate ONLY the function code, nothing else."""
+
+        prompt = f"Generate the {task.execution_environment} function for: {task.name}"
+        
+        code = self.generate(prompt, system_prompt)
+        return self._clean_generated_code(code)
+    
+    def _clean_generated_code(self, code: str) -> str:
+        """Clean and format generated code"""
+        # Remove markdown code blocks if present
+        code = re.sub(r'```\w*\n', '', code)
+        code = re.sub(r'```', '', code)
+        return code.strip()
+    
+    def close(self):
+        """No cleanup needed for your client"""
+        pass
+
+class NaturalLanguageParser:
+    """Uses LLM to parse natural language into structured planning data"""
+    
+    def __init__(self, model_client: ModelClient):
+        self.model_client = model_client
+    
+    def parse_requirements_to_tasks(self, user_request: str) -> dict:
+        """Parse natural language request into structured task data"""
+        
+        system_prompt = """You are a project planning assistant. Parse the user's request into a structured JSON format for task planning.
+
+Use ONLY these data types: "string", "integer", "boolean", "json", "file", "url", "database_record", "datatime"
+resource_type must be exactly one of: "developer", "database", "api_endpoint", "file_system", "compute", "network", "qa"
+
+
+Extract:
+1. Tasks (with names, descriptions, estimated hours, dependencies)
+2. Resources needed (people, equipment, etc.)
+3. Contracts for each task (inputs, outputs, validation rules)
+
+Return ONLY valid JSON in this format:
+{
+  "tasks": [
+    {
+      "id": "task_1",
+      "name": "Task Name",
+      "description": "Description",
+      "duration_hours": 4,
+      "dependencies": ["task_id_if_any"],
+      "required_resources": ["resource_id"],
+      "contract": {
+        "task_id": "task_1",
+        "inputs": [
+          {
+            "name": "input_name",
+            "data_type": "string",
+            "required": true,
+            "validation_rules": ["not empty"],
+            "description": "Input description"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output_name", 
+            "data_type": "json",
+            "validation_rules": ["valid format"],
+            "description": "Output description"
+          }
+        ],
+        "preconditions": ["Condition that must be true before"],
+        "postconditions": ["Condition that must be true after"],
+        "side_effects": ["What changes in the system"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "id": "resource_1",
+      "name": "Resource Name", 
+      "resource_type": "developer",
+      "available": true,
+      "capacity": 1,
+      "properties": {}
+    }
+  ]
+}
+
+Be specific and realistic with time estimates. Create logical task dependencies and comprehensive contracts."""
+
+        prompt = f"Parse this project request: {user_request}"
+        
+        response = self.model_client.generate(prompt, system_prompt)
+        
+        try:
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                response = json_match.group()
+            
+            import json
+            parsed_data = json.loads(response)
+            return parsed_data
+        except json.JSONDecodeError as e:
+            print(f"Error parsing LLM response as JSON: {e}")
+            return self._create_fallback_structure(user_request)
+    
+    def _create_fallback_structure(self, user_request: str) -> dict:
+        """Create a simple fallback structure if LLM parsing fails"""
+        return {
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "name": "Main Task",
+                    "description": user_request,
+                    "duration_hours": 8,
+                    "dependencies": [],
+                    "required_resources": ["person_1"],
+                    "contract": {
+                        "task_id": "task_1",
+                        "inputs": [
+                            {
+                                "name": "requirements",
+                                "data_type": "string",
+                                "required": True,
+                                "validation_rules": ["not empty"],
+                                "description": "Task requirements"
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "name": "result",
+                                "data_type": "string", 
+                                "validation_rules": ["not empty"],
+                                "description": "Task result"
+                            }
+                        ],
+                        "preconditions": ["Requirements available"],
+                        "postconditions": ["Task completed"],
+                        "side_effects": ["System updated"]
+                    }
+                }
+            ],
+            "resources": [
+                {
+                    "id": "person_1",
+                    "name": "Team Member",
+                    "resource_type": "developer",
+                    "available": True,
+                    "capacity": 1,
+                    "properties": {}
+                }
+            ]
+        }
+
+class PlanExplainer:
+    """Uses LLM to explain plans in natural language"""
+    
+    def __init__(self, model_client: ModelClient):
+        self.model_client = model_client
+    
+    def explain_plan_with_validation(self, plan: list, validation_result, original_request: str) -> str:
+        """Enhanced explanation that includes validation results"""
+        
+        system_prompt = """You are a project manager explaining a project plan to a team member. 
+
+The plan has been validated using formal PDDL validation. Include:
+1. Plan summary and timeline
+2. Validation status (valid/invalid)
+3. Any issues or warnings found
+4. Confidence level in the plan
+5. Recommendations
+
+Be clear about the validation results and what they mean for plan reliability."""
+
+        plan_summary = f"Original request: {original_request}\n\n"
+        plan_summary += f"Plan validation: {'✅ VALID' if validation_result.is_valid else '❌ INVALID'}\n\n"
+        
+        if validation_result.errors:
+            plan_summary += f"Validation errors:\n"
+            for error in validation_result.errors:
+                plan_summary += f"- {error}\n"
+            plan_summary += "\n"
+        
+        if validation_result.warnings:
+            plan_summary += f"Validation warnings:\n"
+            for warning in validation_result.warnings:
+                plan_summary += f"- {warning}\n"
+            plan_summary += "\n"
+        
+        plan_summary += "Generated plan:\n"
+        for step in plan:
+            if step.get("action") == "execute_task":
+                plan_summary += f"- {step['task_name']}: {step['duration']} hours (Time {step['start_time']}-{step['end_time']})\n"
+            elif step.get("action") == "error":
+                plan_summary += f"- Issue: {step['message']}\n"
+        
+        prompt = f"Explain this validated project plan:\n\n{plan_summary}"
+        
+        return self.model_client.generate(prompt, system_prompt)
+</file>
+
+<file path="task_builder.py">
+from .pddl_classes import Task, TaskContract, InputContract, OutputContract, DataType, TaskStatus
+from .pddl_client import ModelClient
+from .main import ContractValidator, get_data_type_validation_rules
+from pathlib import Path
+import json
+from typing import Dict
+import re
+import uuid
+
+class TaskBuilder:
+    """Interactive task builder that helps users create and modify tasks."""
+    
+    def __init__(self, model_client=None):
+        """Initialize task builder with optional model client for suggestions."""
+        if model_client is None:
+            self.model_client = ModelClient("codestral:latest")
+        else:
+            self.model_client = model_client
+        self.contract_validator = ContractValidator()
+        self.task_templates = self._load_task_templates()
+    
+    def _load_task_templates(self) -> Dict[str, Task]:
+        """Load predefined task templates."""
+        # Default templates for common tasks
+        templates = {
+            "data_processing": Task(
+                id="data_processing_template",
+                name="Process Data",
+                description="Generic data processing task",
+                duration_hours=1,
+                contract=TaskContract(
+                    task_id="data_processing_template",
+                    inputs=[
+                        InputContract(
+                            name="input_data",
+                            data_type=DataType.JSON,
+                            required=True,
+                            validation_rules=["not empty"],
+                            description="Data to process"
+                        )
+                    ],
+                    outputs=[
+                        OutputContract(
+                            name="processed_data",
+                            data_type=DataType.JSON,
+                            description="Processed data result"
+                        )
+                    ],
+                    preconditions=["Input data must be valid JSON"],
+                    postconditions=["Output contains processed data"]
+                ),
+                status=TaskStatus.PENDING,
+                execution_environment="python"
+            ),
+            "api_call": Task(
+                id="api_call_template",
+                name="Call External API",
+                description="Make a request to an external API",
+                duration_hours=1,
+                contract=TaskContract(
+                    task_id="api_call_template",
+                    inputs=[
+                        InputContract(
+                            name="url",
+                            data_type=DataType.URL,
+                            required=True,
+                            validation_rules=["not empty", "starts with http"],
+                            description="API endpoint URL"
+                        ),
+                        InputContract(
+                            name="method",
+                            data_type=DataType.STRING,
+                            required=True,
+                            validation_rules=["in GET,POST,PUT,DELETE"],
+                            description="HTTP method"
+                        ),
+                        InputContract(
+                            name="headers",
+                            data_type=DataType.JSON,
+                            required=False,
+                            description="HTTP headers"
+                        ),
+                        InputContract(
+                            name="body",
+                            data_type=DataType.JSON,
+                            required=False,
+                            description="Request body"
+                        )
+                    ],
+                    outputs=[
+                        OutputContract(
+                            name="response",
+                            data_type=DataType.JSON,
+                            description="API response"
+                        ),
+                        OutputContract(
+                            name="status_code",
+                            data_type=DataType.INTEGER,
+                            description="HTTP status code"
+                        )
+                    ],
+                    preconditions=["URL must be accessible"],
+                    postconditions=["Response contains API result"]
+                ),
+                status=TaskStatus.PENDING,
+                execution_environment="python"
+            )
+            # Add more templates here
+        }
+        # Try to load any saved templates
+        try:
+            custom_templates_path = Path("task_templates.json")
+            if custom_templates_path.exists():
+                custom_templates = json.loads(custom_templates_path.read_text())
+                for template_id, template_data in custom_templates.items():
+                    templates[template_id] = Task(**template_data)
+        except Exception as e:
+            print(f"Error loading custom templates: {e}")
+        
+        return templates
+        
+    def create_task_from_description(self, description: str) -> Task:
+        """Create a new task from a natural language description."""
+        system_prompt = """Create a well-defined task with appropriate contract from this description.
+        Return a single valid JSON object representing the Task with all required fields:
+        - id: a unique identifier
+        - name: short descriptive name
+        - description: longer explanation
+        - duration_hours: estimated time to complete
+        - contract: with inputs, outputs, preconditions, postconditions
+        The contract should have appropriate data types and validation rules."""
+        
+        result = self.model_client.generate(description, system_prompt)
+        
+        try:
+            # Extract JSON if embedded in markdown or other text
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_match:
+                result = json_match.group()
+                
+            task_data = json.loads(result)
+            task = Task(**task_data)
+            return task
+        except Exception as e:
+            raise ValueError(f"Failed to create task from description: {e}")
+    
+    def create_task_interactive(self) -> Task:
+        """Guide the user through creating a task interactively."""
+        print("=== Create New Task ===")
+        
+        # Basic task properties
+        task_id = f"task_{uuid.uuid4().hex[:8]}"
+        name = input("Task name: ")
+        description = input("Task description: ")
+        
+        try:
+            duration = int(input("Estimated duration in hours: "))
+        except ValueError:
+            duration = 1
+            print("Invalid duration, defaulting to 1 hour")
+        
+        # Choose execution environment
+        print("\nExecution environments: python, javascript, bash, other")
+        execution_environment = input("Select execution environment (default: python): ").lower() or "python"
+        
+        # Create empty contract
+        contract = TaskContract(
+            task_id=task_id,
+            inputs=[],
+            outputs=[],
+            preconditions=[],
+            postconditions=[]
+        )
+        
+        # Build inputs
+        print("\n=== Define Input Parameters ===")
+        while True:
+            input_name = input("\nInput name (leave empty to finish): ")
+            if not input_name:
+                break
+                
+            print("Available data types:", ", ".join([dt.value for dt in DataType]))
+            data_type_str = input("Data type (default: string): ") or "string"
+            try:
+                data_type = DataType(data_type_str.lower())
+            except ValueError:
+                print(f"Invalid data type. Using string instead.")
+                data_type = DataType.STRING
+                
+            required = input("Required? (y/n, default: y): ").lower() != 'n'
+            description = input("Description: ")
+            
+            # Get validation rules with suggestions
+            print("Suggested validation rules for this data type:")
+            suggested_rules = get_data_type_validation_rules(data_type)
+            for i, rule in enumerate(suggested_rules):
+                print(f"  {i+1}. {rule}")
+                
+            validation_rules = []
+            while True:
+                rule = input("Add validation rule (leave empty to finish): ")
+                if not rule:
+                    break
+                validation_rules.append(rule)
+                
+            contract.inputs.append(InputContract(
+                name=input_name,
+                data_type=data_type,
+                required=required,
+                validation_rules=validation_rules,
+                description=description
+            ))
+        
+        # Build outputs
+        print("\n=== Define Output Parameters ===")
+        while True:
+            output_name = input("\nOutput name (leave empty to finish): ")
+            if not output_name:
+                break
+                
+            print("Available data types:", ", ".join([dt.value for dt in DataType]))
+            data_type_str = input("Data type (default: string): ") or "string"
+            try:
+                data_type = DataType(data_type_str.lower())
+            except ValueError:
+                print(f"Invalid data type. Using string instead.")
+                data_type = DataType.STRING
+                
+            description = input("Description: ")
+            
+            # Get validation rules with suggestions
+            print("Suggested validation rules for this data type:")
+            suggested_rules = get_data_type_validation_rules(data_type)
+            for i, rule in enumerate(suggested_rules):
+                print(f"  {i+1}. {rule}")
+                
+            validation_rules = []
+            while True:
+                rule = input("Add validation rule (leave empty to finish): ")
+                if not rule:
+                    break
+                validation_rules.append(rule)
+                
+            contract.outputs.append(OutputContract(
+                name=output_name,
+                data_type=data_type,
+                validation_rules=validation_rules,
+                description=description
+            ))
+        
+        # Preconditions and postconditions
+        print("\n=== Define Conditions ===")
+        
+        while True:
+            precondition = input("Add precondition (leave empty to finish): ")
+            if not precondition:
+                break
+            contract.preconditions.append(precondition)
+            
+        while True:
+            postcondition = input("Add postcondition (leave empty to finish): ")
+            if not postcondition:
+                break
+            contract.postconditions.append(postcondition)
+            
+        # Create and return the task
+        task = Task(
+            id=task_id,
+            name=name,
+            description=description,
+            duration_hours=duration,
+            dependencies=[],
+            required_resources=[],
+            contract=contract,
+            status=TaskStatus.PENDING,
+            execution_environment=execution_environment
+        )
+        
+        print("\nTask created successfully!")
+        return task
+    
+    def create_task_from_template(self, template_id: str) -> Task:
+        """Create a new task based on a template."""
+        if template_id not in self.task_templates:
+            raise ValueError(f"Template '{template_id}' not found")
+            
+        template = self.task_templates[template_id]
+        
+        # Create a deep copy with a new ID
+        new_task_data = template.model_dump()
+        new_task_data['id'] = f"{template_id}_{uuid.uuid4().hex[:8]}"
+        new_task_data['contract']['task_id'] = new_task_data['id']
+        
+        return Task(**new_task_data)
+    
+    def modify_task(self, task: Task) -> Task:
+        """Modify an existing task interactively."""
+        print(f"=== Modifying Task: {task.name} ===")
+        
+        # Show current properties and allow modifications
+        print("\nCurrent properties:")
+        print(f"ID: {task.id}")
+        print(f"Name: {task.name}")
+        print(f"Description: {task.description}")
+        print(f"Duration: {task.duration_hours} hours")
+        print(f"Status: {task.status.value}")
+        print(f"Execution environment: {task.execution_environment}")
+        
+        # Allow modifications to basic properties
+        name = input("\nNew name (leave empty to keep current): ")
+        if name:
+            task.name = name
+            
+        description = input("New description (leave empty to keep current): ")
+        if description:
+            task.description = description
+            
+        duration_str = input("New duration in hours (leave empty to keep current): ")
+        if duration_str:
+            try:
+                task.duration_hours = int(duration_str)
+            except ValueError:
+                print("Invalid duration, keeping current value")
+                
+        env = input("New execution environment (leave empty to keep current): ")
+        if env:
+            task.execution_environment = env
+            
+        # Modify contract
+        print("\nWould you like to modify the contract? (y/n): ")
+        if input().lower() == 'y':
+            self._modify_contract(task.contract)
+            
+        # Dependencies
+        print("\nCurrent dependencies:", task.dependencies)
+        print("Would you like to modify dependencies? (y/n): ")
+        if input().lower() == 'y':
+            task.dependencies = []
+            while True:
+                dep = input("Add dependency ID (leave empty to finish): ")
+                if not dep:
+                    break
+                task.dependencies.append(dep)
+                
+        # Resources
+        print("\nCurrent required resources:", task.required_resources)
+        print("Would you like to modify required resources? (y/n): ")
+        if input().lower() == 'y':
+            task.required_resources = []
+            while True:
+                res = input("Add resource ID (leave empty to finish): ")
+                if not res:
+                    break
+                task.required_resources.append(res)
+                
+        print("\nTask modified successfully!")
+        return task
+    
+    def _modify_contract(self, contract: TaskContract) -> None:
+        """Helper method to modify a task's contract."""
+        # Modify inputs
+        print("\n=== Current Inputs ===")
+        for i, inp in enumerate(contract.inputs):
+            print(f"{i+1}. {inp.name} ({inp.data_type.value}): {inp.description}")
+        
+        print("\nWould you like to modify inputs? (y/n): ")
+        if input().lower() == 'y':
+            # Options to add, modify or remove inputs
+            print("1. Add new input")
+            print("2. Modify existing input")
+            print("3. Remove input")
+            choice = input("Select option: ")
+            
+            if choice == "1":
+                # Add new input (reuse code from create_task_interactive)
+                print("\n=== Add New Input ===")
+                input_name = input("Input name: ")
+                print("Available data types:", ", ".join([dt.value for dt in DataType]))
+                data_type_str = input("Data type (default: string): ") or "string"
+                try:
+                    data_type = DataType(data_type_str.lower())
+                except ValueError:
+                    print(f"Invalid data type. Using string instead.")
+                    data_type = DataType.STRING
+                    
+                required = input("Required? (y/n, default: y): ").lower() != 'n'
+                description = input("Description: ")
+                
+                validation_rules = []
+                while True:
+                    rule = input("Add validation rule (leave empty to finish): ")
+                    if not rule:
+                        break
+                    validation_rules.append(rule)
+                    
+                contract.inputs.append(InputContract(
+                    name=input_name,
+                    data_type=data_type,
+                    required=required,
+                    validation_rules=validation_rules,
+                    description=description
+                ))
+                
+            elif choice == "2":
+                # Modify existing input
+                try:
+                    idx = int(input("Enter input number to modify: ")) - 1
+                    if 0 <= idx < len(contract.inputs):
+                        inp = contract.inputs[idx]
+                        
+                        name = input(f"New name (current: {inp.name}): ")
+                        if name:
+                            inp.name = name
+                            
+                        data_type_str = input(f"New data type (current: {inp.data_type.value}): ")
+                        if data_type_str:
+                            try:
+                                inp.data_type = DataType(data_type_str.lower())
+                            except ValueError:
+                                print("Invalid data type. Keeping current.")
+                                
+                        required_str = input(f"Required? (y/n, current: {'y' if inp.required else 'n'}): ")
+                        if required_str.lower() in ('y', 'n'):
+                            inp.required = required_str.lower() == 'y'
+                            
+                        description = input(f"New description (current: {inp.description}): ")
+                        if description:
+                            inp.description = description
+                            
+                        print("Current validation rules:", inp.validation_rules)
+                        print("Would you like to modify validation rules? (y/n): ")
+                        if input().lower() == 'y':
+                            inp.validation_rules = []
+                            while True:
+                                rule = input("Add validation rule (leave empty to finish): ")
+                                if not rule:
+                                    break
+                                inp.validation_rules.append(rule)
+                    else:
+                        print("Invalid input index")
+                except ValueError:
+                    print("Invalid input")
+                    
+            elif choice == "3":
+                # Remove input
+                try:
+                    idx = int(input("Enter input number to remove: ")) - 1
+                    if 0 <= idx < len(contract.inputs):
+                        removed = contract.inputs.pop(idx)
+                        print(f"Removed input: {removed.name}")
+                    else:
+                        print("Invalid input index")
+                except ValueError:
+                    print("Invalid input")
+                    
+        # Similar structure for outputs
+        print("\n=== Current Outputs ===")
+        for i, out in enumerate(contract.outputs):
+            print(f"{i+1}. {out.name} ({out.data_type.value}): {out.description}")
+        
+        print("\nWould you like to modify outputs? (y/n): ")
+        if input().lower() == 'y':
+            # Options to add, modify or remove outputs
+            print("1. Add new output")
+            print("2. Modify existing output")
+            print("3. Remove output")
+            choice = input("Select option: ")
+            
+            if choice == "1":
+                # Add new output
+                print("\n=== Add New Output ===")
+                output_name = input("Output name: ")
+                print("Available data types:", ", ".join([dt.value for dt in DataType]))
+                data_type_str = input("Data type (default: string): ") or "string"
+                try:
+                    data_type = DataType(data_type_str.lower())
+                except ValueError:
+                    print(f"Invalid data type. Using string instead.")
+                    data_type = DataType.STRING
+                    
+                description = input("Description: ")
+                
+                validation_rules = []
+                while True:
+                    rule = input("Add validation rule (leave empty to finish): ")
+                    if not rule:
+                        break
+                    validation_rules.append(rule)
+                    
+                contract.outputs.append(OutputContract(
+                    name=output_name,
+                    data_type=data_type,
+                    validation_rules=validation_rules,
+                    description=description
+                ))
+                
+            elif choice == "2":
+                # Modify existing output (similar to inputs)
+                try:
+                    idx = int(input("Enter output number to modify: ")) - 1
+                    if 0 <= idx < len(contract.outputs):
+                        out = contract.outputs[idx]
+                        
+                        name = input(f"New name (current: {out.name}): ")
+                        if name:
+                            out.name = name
+                            
+                        data_type_str = input(f"New data type (current: {out.data_type.value}): ")
+                        if data_type_str:
+                            try:
+                                out.data_type = DataType(data_type_str.lower())
+                            except ValueError:
+                                print("Invalid data type. Keeping current.")
+                                
+                        description = input(f"New description (current: {out.description}): ")
+                        if description:
+                            out.description = description
+                            
+                        print("Current validation rules:", out.validation_rules)
+                        print("Would you like to modify validation rules? (y/n): ")
+                        if input().lower() == 'y':
+                            out.validation_rules = []
+                            while True:
+                                rule = input("Add validation rule (leave empty to finish): ")
+                                if not rule:
+                                    break
+                                out.validation_rules.append(rule)
+                    else:
+                        print("Invalid output index")
+                except ValueError:
+                    print("Invalid input")
+                    
+            elif choice == "3":
+                # Remove output
+                try:
+                    idx = int(input("Enter output number to remove: ")) - 1
+                    if 0 <= idx < len(contract.outputs):
+                        removed = contract.outputs.pop(idx)
+                        print(f"Removed output: {removed.name}")
+                    else:
+                        print("Invalid output index")
+                except ValueError:
+                    print("Invalid input")
+                    
+        # Modify preconditions and postconditions
+        print("\nCurrent preconditions:", contract.preconditions)
+        print("Would you like to modify preconditions? (y/n): ")
+        if input().lower() == 'y':
+            contract.preconditions = []
+            while True:
+                precondition = input("Add precondition (leave empty to finish): ")
+                if not precondition:
+                    break
+                contract.preconditions.append(precondition)
+                
+        print("\nCurrent postconditions:", contract.postconditions)
+        print("Would you like to modify postconditions? (y/n): ")
+        if input().lower() == 'y':
+            contract.postconditions = []
+            while True:
+                postcondition = input("Add postcondition (leave empty to finish): ")
+                if not postcondition:
+                    break
+                contract.postconditions.append(postcondition)
+</file>
+
+<file path="task_execution_manager.py">
+from .pddl_classes import Task, ExecutionContext
+from .pddl_client import ModelClient
+from .main import ContractValidator, ResourceManager
+from pathlib import Path
+import json
+from typing import Dict, Any
+import re
+import uuid
+from .task_repository import TaskRepository
+
+
+class TaskExecutionManager:
+    """Manages execution of tasks and workflows."""
+    
+    def __init__(self, model_client=None):
+        """Initialize with optional model client."""
+        if model_client is None:
+            self.model_client = ModelClient("codestral:latest")
+        else:
+            self.model_client = model_client
+            
+        self.contract_validator = ContractValidator()
+        self.resource_manager = ResourceManager()
+        
+    def prepare_execution_context(self, task: Task, inputs: Dict[str, Any] = None) -> ExecutionContext:
+        """Prepare execution context for a task."""
+        if inputs is None:
+            inputs = {}
+            
+        context = ExecutionContext(
+            task_id=task.id,
+            inputs=inputs,
+            outputs={},
+            errors=[],
+            execution_trace=[]
+        )
+        
+        # Validate inputs
+        errors = self.contract_validator.validate_task_inputs(task, inputs)
+        if errors:
+            context.errors.extend(errors)
+            
+        return context
+        
+    def execute_task(self, task: Task, context: ExecutionContext) -> Dict[str, Any]:
+        """Execute a single task."""
+        # Check if context has errors
+        if context.errors:
+            return {"success": False, "errors": context.errors}
+            
+        try:
+            # Generate code if not already generated
+            if task.generated_code is None:
+                task.generated_code = self.model_client.generate_code_with_contract(task)
+                
+            # Create execution sandbox
+            result = self._execute_code_in_sandbox(task.generated_code, context.inputs)
+            
+            # Update context with results
+            context.outputs = result.get("outputs", {})
+            if "trace" in result:
+                context.execution_trace.extend(result["trace"])
+            if "errors" in result:
+                context.errors.extend(result["errors"])
+                
+            # Validate outputs
+            output_errors = self.contract_validator.validate_task_outputs(task, context.outputs)
+            if output_errors:
+                context.errors.extend(output_errors)
+                
+            return {
+                "success": not context.errors,
+                "outputs": context.outputs,
+                "errors": context.errors,
+                "trace": context.execution_trace
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "errors": [f"Execution error: {str(e)}"]}
+</file>
+
+<file path="task_repository.py">
+from .pddl_classes import Task, TaskStatus
+from pathlib import Path
+import json
+from typing import Dict, List, Optional
+
+
+
+class TaskRepository:
+    """Storage and management for user-defined tasks."""
+    
+    def __init__(self, storage_path: str = "user_tasks.json"):
+        """Initialize the repository with a storage file path."""
+        self.storage_path = Path(storage_path)
+        self.tasks: Dict[str, Task] = {}
+        self._load_tasks()
+        
+    def _load_tasks(self) -> None:
+        """Load tasks from storage."""
+        if not self.storage_path.exists():
+            return
+            
+        try:
+            tasks_data = json.loads(self.storage_path.read_text())
+            for task_id, task_data in tasks_data.items():
+                self.tasks[task_id] = Task(**task_data)
+        except Exception as e:
+            print(f"Error loading tasks: {e}")
+            
+    def save_tasks(self) -> None:
+        """Save tasks to storage."""
+        try:
+            tasks_data = {task_id: task.model_dump() for task_id, task in self.tasks.items()}
+            self.storage_path.write_text(json.dumps(tasks_data, indent=2))
+        except Exception as e:
+            print(f"Error saving tasks: {e}")
+            
+    def add_task(self, task: Task) -> None:
+        """Add a task to the repository."""
+        self.tasks[task.id] = task
+        self.save_tasks()
+        
+    def update_task(self, task: Task) -> None:
+        """Update an existing task."""
+        self.tasks[task.id] = task
+        self.save_tasks()
+        
+    def delete_task(self, task_id: str) -> bool:
+        """Delete a task from the repository."""
+        if task_id in self.tasks:
+            del self.tasks[task_id]
+            self.save_tasks()
+            return True
+        return False
+        
+    def get_task(self, task_id: str) -> Optional[Task]:
+        """Get a task by ID."""
+        return self.tasks.get(task_id)
+        
+    def list_tasks(self) -> List[Task]:
+        """List all tasks."""
+        return list(self.tasks.values())
+        
+    def search_tasks(self, query: str) -> List[Task]:
+        """Search tasks by name or description."""
+        query = query.lower()
+        return [
+            task for task in self.tasks.values()
+            if query in task.name.lower() or query in task.description.lower()
+        ]
+        
+    def get_tasks_by_status(self, status: TaskStatus) -> List[Task]:
+        """Get tasks by status."""
+        return [task for task in self.tasks.values() if task.status == status]
+</file>
+
+<file path="test_demo.py">
+import tempfile
+import json
+from pathlib import Path
+
+# Updated imports to reflect the new class structure
+from app.utils.pddl.main import SecureContractPlanningAPI, PlanRequest, ContractValidator
+from app.utils.pddl.pddl_classes import Task, TaskContract, InputContract, OutputContract, DataType
+from .pddl_classes import *
+
+def generate_plan_and_code_from_description(description: str, use_solver: bool = False):
+    """
+    Generates a plan and code using the main SecureContractPlanningAPI and prints all outputs.
+    
+    Args:
+        description: The natural language description of the goal.
+        use_solver: Whether to attempt using an external PDDL solver.
+    """
+    # Initialize the high-level API, which is the correct entry point
+    api = SecureContractPlanningAPI()
+    
+    # Create a request object
+    request = PlanRequest(
+        description=description,
+        use_real_pddl_solver=use_solver
+    )
+    
+    print(f"Parsing and Planning: '{description}' (Solver: {use_solver})")
+    
+    # The API call handles parsing, planning, and code generation
+    response = api.create_plan(request)
+    
+    # Print the entire response object as a formatted JSON for a complete overview
+    print("\n" + "#"*20 + " FULL API RESPONSE " + "#"*20)
+    print(response.model_dump_json(indent=2))
+    print("#"*59 + "\n")
+
+    print(f"✅ Execution Ready: {response.execution_ready}")
+    print(f"⚙️ Solver Used: {response.solver_used}")
+
+    # Print a detailed breakdown of the response components
+    print("\n" + "="*10 + " DETAILED OUTPUTS " + "="*10)
+
+    print("\n📝 Generated Tasks and Detailed Contracts:")
+    for task_id, contract in response.contracts.items():
+        print(f"\n  --- Task: {task_id} ---")
+        print(f"  Inputs: {json.dumps([inp.model_dump() for inp in contract.inputs], indent=4)}")
+        print(f"  Outputs: {json.dumps([out.model_dump() for out in contract.outputs], indent=4)}")
+        print(f"  Preconditions: {contract.preconditions}")
+        print(f"  Postconditions: {contract.postconditions}")
+    
+    print(f"\n🗺️ Execution Plan:")
+    for i, step in enumerate(response.plan):
+        print(f"  {i+1}. {step}")
+
+    print("\n🚦 Status Transitions:")
+    if response.status_transitions:
+        for transition in response.status_transitions:
+            print(f"  - {transition}")
+    else:
+        print("  - No status transitions in plan.")
+
+    print("\n📦 Resource Allocation:")
+    for task_id, resources in response.resource_allocation.items():
+        print(f"  - {task_id}: {resources}")
+
+    print("\n" + "🔍 Contract Validation Results:")
+    for task_id, errors in response.validation_results.items():
+        if not errors:
+            print(f"  - {task_id}: ✅ Validated successfully.")
+        else:
+            print(f"  - {task_id}: ❌ Validation failed with errors: {errors}")
+
+    print("\n💻 Generated Code:")
+    for task_id, code in response.generated_code.items():
+        print(f"\n--- Code for {task_id} ---")
+        print(code)
+        print("--- End of Code ---")
+        
+    return response
+
+def create_custom_task_with_contract() -> Task:
+    """
+    Creates a custom task with an explicit contract using valid rules.
+    """
+    # Define contract with validation rules that exist in the validator
+    contract = TaskContract(
+        task_id="data_processor",
+        inputs=[
+            InputContract(
+                name="csv_file_path",
+                data_type=DataType.FILE,
+                required=True,
+                # NOTE: File existence is checked by the DataType validator itself, not a rule.
+                validation_rules=["ends with .csv"],
+                description="Input CSV file to process"
+            ),
+            InputContract(
+                name="filter_config",
+                data_type=DataType.JSON,
+                required=True,
+                # Use valid rules from the new ContractValidator
+                validation_rules=["has columns", "has criteria"],
+                description="Filtering configuration"
+            )
+        ],
+        outputs=[
+            OutputContract(
+                name="processed_data",
+                data_type=DataType.JSON,
+                validation_rules=["not empty"],
+                description="Filtered and processed data"
+            )
+        ],
+        preconditions=["CSV file is readable", "Filter config is valid"],
+        postconditions=["Data is filtered according to config"]
+    )
+    
+    task = Task(
+        id="data_processor",
+        name="CSV Data Processor",
+        description="Process CSV data with custom filtering",
+        duration_hours=2,
+        dependencies=[],
+        required_resources=["compute", "storage"],
+        contract=contract,
+        status=TaskStatus.PENDING,
+        execution_environment="python"
+    )
+    
+    return task
+
+def demonstrate_contract_validation():
+    """
+    Shows how to use the ContractValidator independently.
+    NOTE: This replaces the old `validate_and_execute_task` function.
+    """
+    print("\n=== Demonstrating Contract Validation (No Execution) ===")
+    validator = ContractValidator()
+    task = create_custom_task_with_contract()
+    
+    # Create a temporary dummy file for the validation to pass
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=True, mode='w') as temp_csv:
+        temp_csv.write("header1,header2\nvalue1,value2")
+        temp_csv.flush() # Ensure data is written to disk
+        
+        # --- Test Case 1: Valid Inputs ---
+        valid_inputs = {
+            "csv_file_path": temp_csv.name, # Use the path of the existing temp file
+            "filter_config": {
+                "columns": ["name", "age", "city"],
+                "criteria": {"age": ">= 18"}
+            }
+        }
+        
+        print("\nTesting with VALID inputs...")
+        input_errors = validator.validate_task_inputs(task, valid_inputs)
+        if not input_errors:
+            print("✅ Input validation passed as expected.")
+        else:
+            print(f"❌ Input validation failed unexpectedly: {input_errors}")
+            
+        # --- Test Case 2: Invalid Inputs ---
+        invalid_inputs = {
+            "csv_file_path": "/non/existent/path.csv", # File does not exist
+            "filter_config": {
+                "columns": ["name", "age"]
+                # Missing 'criteria' key
+            }
+        }
+        
+        print("\nTesting with INVALID inputs...")
+        invalid_errors = validator.validate_task_inputs(task, invalid_inputs)
+        if invalid_errors:
+            print("✅ Input validation failed as expected.")
+            for error in invalid_errors:
+                print(f"   - {error}")
+        else:
+            print("❌ Input validation passed unexpectedly.")
+
+if __name__ == "__main__":
+    
+    # Pattern 1: Simple description to code using the default topological planner
+    print("="*50)
+    print("### Pattern 1: Description to Code (Topological Sort Planner) ###")
+    print("="*50)
+    description_to_code = "Create a REST API endpoint that validates user input and stores data in a database"
+    generate_plan_and_code_from_description(description_to_code, use_solver=False)
+    
+    # Pattern 2: Demonstrating the creation of a custom task object
+    print("\n" + "="*50)
+    print("### Pattern 2: Custom Task Definition ###")
+    print("="*50)
+    custom_task = create_custom_task_with_contract()
+    print(f"Successfully created task: '{custom_task.name}'")
+    print("Full task object details:")
+    # Use model_dump_json for a clean, readable representation of the Pydantic object
+    print(custom_task.model_dump_json(indent=2))
+    
+    # Pattern 3: Independent validation demo
+    print("\n" + "="*50)
+    print("### Pattern 3: Standalone Contract Validation ###")
+    print("="*50)
+    demonstrate_contract_validation()
+</file>
+
+<file path="workflow_builder.py">
+from typing import Dict, Any
+import uuid
+from .task_repository import TaskRepository
+
+
+class WorkflowBuilder:
+    """Build workflows by connecting multiple tasks."""
+    
+    def __init__(self, task_repository: TaskRepository):
+        """Initialize with a task repository."""
+        self.task_repository = task_repository
+        
+    def create_workflow(self, name: str, description: str) -> Dict[str, Any]:
+        """Create a new workflow with connected tasks."""
+        print(f"=== Creating Workflow: {name} ===")
+        print(description)
+        
+        workflow = {
+            "id": f"workflow_{uuid.uuid4().hex[:8]}",
+            "name": name,
+            "description": description,
+            "tasks": {},
+            "connections": []
+        }
+        
+        # Show available tasks
+        available_tasks = self.task_repository.list_tasks()
+        print("\nAvailable tasks:")
+        for i, task in enumerate(available_tasks):
+            print(f"{i+1}. {task.name} ({task.id})")
+            
+        # Add tasks to workflow
+        workflow_tasks = {}
+        while True:
+            task_choice = input("\nAdd task to workflow (number or ID, leave empty to finish): ")
+            if not task_choice:
+                break
+                
+            try:
+                # Handle both number (index) or direct ID input
+                if task_choice.isdigit() and int(task_choice) <= len(available_tasks):
+                    task = available_tasks[int(task_choice) - 1]
+                else:
+                    task = self.task_repository.get_task(task_choice)
+                    
+                if task:
+                    # Allow custom task ID in the workflow context
+                    workflow_task_id = input(f"Workflow-specific task ID (default: {task.id}): ") or task.id
+                    workflow_tasks[workflow_task_id] = task
+                    print(f"Added {task.name} as {workflow_task_id}")
+                else:
+                    print("Task not found")
+            except (ValueError, IndexError):
+                print("Invalid selection")
+                
+        # No tasks added
+        if not workflow_tasks:
+            print("No tasks added to workflow.")
+            return workflow
+            
+        # Create connections between tasks
+        print("\n=== Define Task Connections ===")
+        print("Available tasks in workflow:")
+        for task_id in workflow_tasks:
+            print(f"- {task_id}")
+            
+        while True:
+            print("\nAdd connection (format: source_task_id->target_task_id, leave empty to finish):")
+            connection = input()
+            if not connection:
+                break
+                
+            if "->" in connection:
+                source, target = connection.split("->")
+                source = source.strip()
+                target = target.strip()
+                
+                if source in workflow_tasks and target in workflow_tasks:
+                    workflow["connections"].append({"from": source, "to": target})
+                    # Auto-update dependency
+                    task_obj = workflow_tasks[target]
+                    if source not in task_obj.dependencies:
+                        task_obj.dependencies.append(source)
+                        self.task_repository.update_task(task_obj)
+                    print(f"Connection added: {source} -> {target}")
+                else:
+                    print("Invalid task IDs")
+            else:
+                print("Invalid format. Use source->target")
+                
+        # Store tasks in workflow
+        workflow["tasks"] = {tid: task.model_dump() for tid, task in workflow_tasks.items()}
+        
+        print("\nWorkflow created successfully!")
+        return workflow
+        
+    def visualize_workflow(self, workflow: Dict[str, Any]) -> None:
+        """Visualize workflow as ASCII diagram."""
+        if not workflow["tasks"]:
+            print("Empty workflow")
+            return
+            
+        print(f"\n=== Workflow: {workflow['name']} ===")
+        print(workflow["description"])
+        print("\nTasks:")
+        for task_id, task_data in workflow["tasks"].items():
+            print(f"- {task_id}: {task_data['name']}")
+            
+        print("\nConnections:")
+        for conn in workflow["connections"]:
+            print(f"  {conn['from']} -> {conn['to']}")
+            
+        # Basic ASCII visualization
+        print("\nWorkflow diagram:")
+        print("-" * 40)
+        
+        # Find roots (tasks with no incoming connections)
+        incoming = {task_id: 0 for task_id in workflow["tasks"]}
+        for conn in workflow["connections"]:
+            incoming[conn["to"]] += 1
+            
+        roots = [task_id for task_id, count in incoming.items() if count == 0]
+        
+        # BFS to visualize workflow levels
+        visited = set()
+        current_level = roots
+        level = 0
+        
+        while current_level:
+            print(f"Level {level}:", " | ".join(current_level))
+            visited.update(current_level)
+            
+            next_level = []
+            for task_id in current_level:
+                # Find outgoing connections
+                for conn in workflow["connections"]:
+                    if conn["from"] == task_id and conn["to"] not in visited and conn["to"] not in next_level:
+                        next_level.append(conn["to"])
+                        
+            current_level = next_level
+            level += 1
+            
+        # Check for disconnected tasks
+        disconnected = set(workflow["tasks"].keys()) - visited
+        if disconnected:
+            print("Disconnected tasks:", ", ".join(disconnected))
+            
+        print("-" * 40)
+</file>
+
+</files>

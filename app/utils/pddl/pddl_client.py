@@ -6,19 +6,13 @@ import re
 class ModelClient:
     """Wrapper for your existing call_model function with contract-aware code generation"""
     
-    def __init__(self, model: str = "gpt-oss:20b"):
+    def __init__(self, model: str = "codestral:latest"):
         self.model = model
     
     def generate(self, prompt: str, system_prompt: str = None) -> str:
         """Generate text using your call_model function"""
-        try:
-            if system_prompt:
-                # Combine system prompt with user prompt
-                full_prompt = f"System: {system_prompt}\n\nUser: {prompt}"
-            else:
-                full_prompt = prompt
-            
-            response = call_model(full_prompt, role="user", model=self.model)
+        try: 
+            response = call_model(prompt, role="user", model=self.model, system_prompt = system_prompt)
             
             # Extract content from response (adjust based on your response format)
             if hasattr(response, 'choices') and response.choices:
@@ -106,6 +100,10 @@ class NaturalLanguageParser:
         """Parse natural language request into structured task data"""
         
         system_prompt = """You are a project planning assistant. Parse the user's request into a structured JSON format for task planning.
+
+Use ONLY these data types: "string", "integer", "boolean", "json", "file", "url", "database_record", "datatime"
+resource_type must be exactly one of: "developer", "database", "api_endpoint", "file_system", "compute", "network", "qa"
+
 
 Extract:
 1. Tasks (with names, descriptions, estimated hours, dependencies)
