@@ -312,6 +312,8 @@ alembic downgrade -1
 
 ## Databricks Integration
 
+A ready-to-run Databricks notebook is included at **[`example.ipynb`](example.ipynb)**. Import it into your workspace, update `HOST` and configure your secret scope, and run it. It covers all services: Kafka streaming (all 3 use cases), Neo4j, PostgreSQL, and REST API health checks.
+
 This stack is designed to serve as a local data source that Databricks can connect to for streaming ingestion, batch reads, and graph queries. Below are connection instructions for each service.
 
 ### Prerequisites
