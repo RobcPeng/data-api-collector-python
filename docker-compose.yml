@@ -9,8 +9,20 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "127.0.0.1:${POSTGRES_PORT_EXTERNAL:-5432}:${POSTGRES_PORT:-5432}"
+      - "15433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ${SSL_CERT_PATH:-/etc/letsencrypt/live/your-hostname.com/fullchain.pem}:/certs/server.crt:ro
+      - ${SSL_KEY_PATH:-/etc/letsencrypt/live/your-hostname.com/privkey.pem}:/certs/server.key:ro
+    entrypoint:
+      - bash
+      - -c
+      - |
+        cp /certs/server.crt /var/lib/postgresql/server.crt
+        cp /certs/server.key /var/lib/postgresql/server.key
+        chown postgres:postgres /var/lib/postgresql/server.crt /var/lib/postgresql/server.key
+        chmod 600 /var/lib/postgresql/server.key
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/var/lib/postgresql/server.crt -c ssl_key_file=/var/lib/postgresql/server.key
     restart: unless-stopped
     networks:
       - app-network
