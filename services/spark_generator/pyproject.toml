@@ -1,0 +1,17 @@
+[project]
+name = "spark-generator"
+version = "0.1.0"
+description = "Spark-based streaming data generator service for Kafka"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "confluent-kafka>=2.11.1",
+    "dbldatagen>=0.4.0",
+    "fastapi[standard]>=0.116.1",
+    "jmespath>=1.0.1",
+    "numpy>=2.0.0",
+    "pandas>=2.0.0",
+    "pyparsing>=3.1.0",
+    "pyspark>=4.0.1",
+    "uvicorn>=0.35.0",
+]

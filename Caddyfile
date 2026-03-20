@@ -4,61 +4,39 @@
         respond "OK" 200
     }
 
-    # Protected test endpoints - require API key
+    # Global API key gate — applies to all routes below
+    @unauthorized {
+        not header X-Api-Key "{$SECRET_KEY}"
+    }
+    handle @unauthorized {
+        respond "Unauthorized" 401
+    }
+
+    # API endpoints
     handle /api/* {
-        @unauthorized {
-            not header X-Api-Key "{$SECRET_KEY}"
-        }
-        
-        handle @unauthorized {
-            respond "Unauthorized" 401
-        }
-        
         reverse_proxy app:8000
     }
 
-    # Protected Elasticsearch endpoints - require API key
+    # Elasticsearch proxy
     handle /elasticsearch/* {
-        @unauthorized {
-            not header X-Api-Key "{$SECRET_KEY}"
-        }
-        
-        handle @unauthorized {
-            respond "Unauthorized" 401
-        }
-        
         uri strip_prefix /elasticsearch
         reverse_proxy data-api-elasticsearch:9200
     }
 
+    # Neo4j HTTP browser
     handle /neo4j/* {
-        @unauthorized {
-            not header X-Api-Key "{$SECRET_KEY}"
-        }
-        
-        handle @unauthorized {
-            respond "Unauthorized" 401
-        }
-        
         uri strip_prefix /neo4j
         reverse_proxy data-api-neo4j:7474
     }
 
+    # Neo4j Bolt protocol
     handle /neo4j-bolt/* {
-        @unauthorized {
-            not header X-Api-Key "{$SECRET_KEY}"
-        }
-        
-        handle @unauthorized {
-            respond "Unauthorized" 401
-        }
-        
         uri strip_prefix /neo4j-bolt
         reverse_proxy data-api-neo4j:7687
     }
 
-    # Default handler for all other requests (frontend) - no auth required
-    handle /* {
-        reverse_proxy app:8000
+    # Block all other paths
+    handle {
+        respond "Not Found" 404
     }
 }

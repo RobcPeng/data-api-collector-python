@@ -21,5 +21,6 @@ dependencies = [
     "torchvision>=0.23.0",
     "llama-cpp-python>=0.3.16",
     "huggingface-hub>=0.34.4",
+    "fitz>=0.0.1.dev2",
     "pymupdf>=1.26.4",
 ]

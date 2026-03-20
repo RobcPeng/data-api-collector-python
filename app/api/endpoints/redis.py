@@ -22,7 +22,7 @@ async def test_redis():
             "used_memory_human": info["used_memory_human"]
         }
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}
      
 @router.post("/set")
 async def set_redis(request: RedisReq):
@@ -41,7 +41,7 @@ async def set_redis(request: RedisReq):
             "used_memory_human": info["used_memory_human"]
         }
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}
 
 @router.get("/get")
 async def get_redis(key_store: str):
@@ -56,4 +56,4 @@ async def get_redis(key_store: str):
             "used_memory_human": info["used_memory_human"]
         }
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}

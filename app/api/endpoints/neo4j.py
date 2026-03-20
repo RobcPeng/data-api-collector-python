@@ -31,7 +31,7 @@ async def neo4j_health_check():
     except AuthError:
         raise HTTPException(status_code=500, detail="Neo4j authentication failed")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Neo4j connection failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Neo4j connection failed")
 
 @router.get("/neo4j/version")
 async def neo4j_version():
@@ -48,7 +48,7 @@ async def neo4j_version():
                 "edition": record["edition"]
             }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "internal error"}
 
 @router.get("/neo4j/statistics")
 async def neo4j_statistics():
@@ -79,7 +79,7 @@ async def neo4j_statistics():
                 "labels": labels
             }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "internal error"}
 
 @router.get("/neo4j/connection-info")
 async def neo4j_connection_info():
@@ -97,7 +97,7 @@ async def neo4j_connection_info():
             "connection_lifetime": driver._pool_config.max_connection_lifetime
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "internal error"}
 
 @router.get("/neo4j/query-test")
 async def neo4j_query_test():
@@ -124,4 +124,4 @@ async def neo4j_query_test():
                 }
             }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "internal error"}

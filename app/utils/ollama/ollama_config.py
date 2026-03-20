@@ -3,7 +3,7 @@ from app.core.config import settings
 
 client = OpenAI(
     base_url=settings.OLLAMA_BASE_URL,
-    api_key="---"
+    api_key=settings.OLLAMA_API_KEY
 )
 
 model: str = "gpt-oss:20b"

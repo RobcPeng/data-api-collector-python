@@ -58,7 +58,7 @@ async def analyze_file_with_question(
             raise HTTPException(status_code=e.response.status_code, detail=f"Error from OCR service: {error_detail}")
         except Exception as e:
             print(f"Unexpected error: {e}")
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+            raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 @router.post("/analyze-image", response_model=FinalResponse)
 async def analyze_image_with_question(

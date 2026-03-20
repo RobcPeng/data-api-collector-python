@@ -19,7 +19,7 @@ async def test_orm_connection(db: Session = Depends(get_db)):
             "database_version": row.db_version
         }
     except Exception as e:
-        return {"status":"error", "message":str(e)}
+        return {"status":"error", "message":"internal error"}
     
 @router.get("/raw/sql")
 async def test_raw_sql():
@@ -34,7 +34,7 @@ async def test_raw_sql():
                 "current_time": str(row.current_time)
             }
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"} 
      
      
 @router.get("/connection-info")

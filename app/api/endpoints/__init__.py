@@ -6,6 +6,7 @@ from .neo4j import router as neo_data_sources_router
 from .llms import router as llm_router
 from .ollama_test import router as ollama_test_router
 from .service_ocr import router as service_ocr_router
+from .kafka_generators import router as kafka_generators_router
 # Create main router that combines all endpoint routers
 router = APIRouter(prefix="/api/v1")
 
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(data_sources_router)
 router.include_router(neo_data_sources_router)
 router.include_router(kafka_router)
+router.include_router(kafka_generators_router)
 router.include_router(redis_router)
 router.include_router(llm_router)
 router.include_router(ollama_test_router)

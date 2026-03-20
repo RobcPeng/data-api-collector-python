@@ -1,27 +1,49 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
 build/
 dist/
 wheels/
 *.egg-info
-
-# Virtual environments
 .venv
-.env
-!.env.example
-api-key.json
-!api-key.json.example
-repomix-output.txt
+venv/
+env/
 
+# Environment and secrets
+.env
+.env.*
+!.env.example
+api-keys.json
+!api-keys.json.example
+kafka_server_jaas.conf
+*.pem
+*.key
+*.crt
+*.p12
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project data (local volumes)
+elastic_data/
+kafka_data/
+huggingface_cache/
+
+# Build artifacts
+repomix-output.txt
+repomix-output.xml
+.python-version
+
+# Logs
+*.log
+
+# Alembic
 migrations/__pycache__/
 migrations/versions/__pycache__/
-*.pyc
-*.pyo
-*~
-*.swp
-.python-version
-.DS_Store
-elastic_data
-kafka_data
-huggingface_cache/

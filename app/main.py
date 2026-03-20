@@ -11,8 +11,9 @@ app = FastAPI(
     debug=settings.DEBUG,
     version="1.0.0",
     description="Data API with multiple service integrations",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 
 # Include routers

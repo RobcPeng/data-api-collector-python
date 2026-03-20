@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -24,10 +24,10 @@ async def kafka_test_produce_message(request: KafkaMessage, db: Session = Depend
             topic_message = request.topic_message    
         )
         db.add(kafka_event)
-        await db.commit()
+        db.commit()
         return {"status": "success", "topic": request.topic_name, "message": request.topic_message}
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}
      
 @router.post("/producer/send-message_old_flush")
 async def kafka_test_produce_message_old(request: KafkaMessage, db: Session = Depends(get_db)):
@@ -44,10 +44,10 @@ async def kafka_test_produce_message_old(request: KafkaMessage, db: Session = De
         producer.flush() 
         return {"status": "success", "topic": request.topic_name, "message": request.topic_message}
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}
     
 @router.get("/consume/consume-message")
-async def kafka_test_consume_message(topic_name: str, message_limit: int = 5):
+async def kafka_test_consume_message(topic_name: str, message_limit: int = Query(default=5, ge=1, le=100)):
     try:
         messages = []
         consumer.subscribe([topic_name])
@@ -66,7 +66,7 @@ async def kafka_test_consume_message(topic_name: str, message_limit: int = 5):
                 })
         return {"status": "success", "messages": messages}
     except Exception as e:
-         return {"status":"error", "message":str(e)} 
+         return {"status":"error", "message":"internal error"}
      
 @router.get("/events")
 async def get_kafka_events(
