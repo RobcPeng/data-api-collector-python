@@ -265,6 +265,278 @@ for use_case in ["fraud_detection", "telemetry", "web_traffic"]:
     print(f"{use_case}: {resp.json()['generator_id']}")
 ```
 
+### SLED Data Generators (State, Local & Higher Ed)
+
+Generate large volumes of realistic mock data across Kafka, Neo4j, and PostgreSQL for 6 SLED use cases. Data is generated programmatically (not hardcoded) with configurable scale, weighted distributions, and realistic value sets.
+
+| Use Case | Kafka Topic | Neo4j Nodes | Postgres Tables |
+|---|---|---|---|
+| `student_enrollment` | `streaming-student-enrollment` | Student, Course, Department, DegreeProgram | sled_students, sled_courses, sled_enrollment_events |
+| `grant_budget` | `streaming-grant-budget` | FundingSource, Agency, Program, Vendor, LineItem | sled_budget_transactions, sled_agencies, sled_vendors |
+| `citizen_services` | `streaming-citizen-services` | Citizen, ServiceRequest, ServiceDepartment, Asset, District | sled_service_requests, sled_citizens, sled_assets |
+| `k12_early_warning` | `streaming-k12-early-warning` | K12Student, School, Teacher, RiskIndicator, Intervention | sled_k12_events, sled_k12_students, sled_schools |
+| `procurement` | `streaming-procurement` | ProcAgency, ProcVendor, Contract, Lobbyist | sled_procurement_events, sled_contracts |
+| `case_management` | `streaming-case-management` | Client, Case, Caseworker, HHSAgency, HHSProgram | sled_case_events, sled_clients, sled_cases |
+
+#### Kafka — Stream SLED events
+
+Uses the same generator start/stop pattern as fraud/telemetry/web_traffic.
+
+<details>
+<summary>curl</summary>
+
+```bash
+# Start a SLED streaming generator
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"use_case": "student_enrollment", "rows_per_batch": 100, "batch_interval_seconds": 1.0, "timeout_minutes": 10}' \
+  http://localhost:10800/api/v1/kafka/generators/start
+
+# Start all 6 SLED generators
+for uc in student_enrollment grant_budget citizen_services k12_early_warning procurement case_management; do
+  curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+    -d "{\"use_case\": \"$uc\", \"rows_per_batch\": 100, \"batch_interval_seconds\": 1.0, \"timeout_minutes\": 10}" \
+    http://localhost:10800/api/v1/kafka/generators/start
+done
+```
+</details>
+
+```python
+# Start all SLED Kafka generators
+sled_use_cases = [
+    "student_enrollment", "grant_budget", "citizen_services",
+    "k12_early_warning", "procurement", "case_management",
+]
+
+for use_case in sled_use_cases:
+    resp = requests.post(f"{API}/kafka/generators/start", headers=HEADERS, json={
+        "use_case": use_case,
+        "rows_per_batch": 100,
+        "batch_interval_seconds": 1.0,
+        "timeout_minutes": 10,
+    })
+    print(f"{use_case}: {resp.json()['generator_id']}")
+```
+
+#### Neo4j — Populate & clear graph data
+
+Generates nodes with rich properties and relationship networks (e.g., Student→Course→Department, Client→Case→Caseworker→Agency). The `num_records` parameter controls base entity count; related entities and relationships scale proportionally.
+
+<details>
+<summary>curl</summary>
+
+```bash
+# Populate Neo4j with student enrollment graph (5000 students + courses, departments, programs, relationships)
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"num_records": 5000}' \
+  http://localhost:10800/api/v1/data-sources/neo4j/sled/student_enrollment/populate
+
+# Check status
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/neo4j/sled/student_enrollment/status
+
+# Clear a use case's graph data
+curl -X DELETE -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/neo4j/sled/student_enrollment/clear
+
+# List populate jobs
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/neo4j/sled/jobs
+```
+</details>
+
+```python
+# Populate all 6 use cases in Neo4j
+for use_case in sled_use_cases:
+    resp = requests.post(
+        f"{API}/data-sources/neo4j/sled/{use_case}/populate",
+        headers=HEADERS,
+        json={"num_records": 5000},
+    )
+    print(f"{use_case}: {resp.json()}")
+
+# Check counts
+for use_case in sled_use_cases:
+    status = requests.get(f"{API}/data-sources/neo4j/sled/{use_case}/status", headers=HEADERS).json()
+    print(f"{use_case}: {status['counts']}")
+
+# Clear a specific use case
+requests.delete(f"{API}/data-sources/neo4j/sled/procurement/clear", headers=HEADERS).json()
+```
+
+#### PostgreSQL — Populate & clear relational data
+
+Creates tables automatically (`CREATE TABLE IF NOT EXISTS`) and bulk inserts data in batches. Tables are prefixed with `sled_` to avoid collisions with existing tables.
+
+<details>
+<summary>curl</summary>
+
+```bash
+# Populate Postgres with K-12 early warning data (5000 students + schools, events)
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"num_records": 5000}' \
+  http://localhost:10800/api/v1/data-sources/sled/k12_early_warning/populate
+
+# Check row counts
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/sled/k12_early_warning/status
+
+# Truncate tables for a use case
+curl -X DELETE -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/sled/k12_early_warning/clear
+```
+</details>
+
+```python
+# Populate all 6 use cases in Postgres
+for use_case in sled_use_cases:
+    resp = requests.post(
+        f"{API}/data-sources/sled/{use_case}/populate",
+        headers=HEADERS,
+        json={"num_records": 10000},
+    )
+    print(f"{use_case}: {resp.json()}")
+
+# Check row counts
+for use_case in sled_use_cases:
+    status = requests.get(f"{API}/data-sources/sled/{use_case}/status", headers=HEADERS).json()
+    print(f"{use_case}: {status['counts']}")
+```
+
+#### SLED Kafka Schemas (for Databricks Structured Streaming)
+
+<details>
+<summary>Student Enrollment schema</summary>
+
+```python
+student_enrollment_schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("student_id", StringType()),
+    StructField("course_id", StringType()),
+    StructField("action", StringType()),
+    StructField("semester", StringType()),
+    StructField("department", StringType()),
+    StructField("grade", StringType()),
+    StructField("credits", IntegerType()),
+    StructField("campus", StringType()),
+    StructField("gpa_impact", DecimalType(4, 2)),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
+<details>
+<summary>Grant & Budget schema</summary>
+
+```python
+grant_budget_schema = StructType([
+    StructField("transaction_id", StringType()),
+    StructField("fund_source_id", StringType()),
+    StructField("agency_id", StringType()),
+    StructField("program_id", StringType()),
+    StructField("vendor_id", StringType()),
+    StructField("transaction_type", StringType()),
+    StructField("amount", DecimalType(14, 2)),
+    StructField("fund_category", StringType()),
+    StructField("fiscal_year", IntegerType()),
+    StructField("quarter", StringType()),
+    StructField("cost_center", StringType()),
+    StructField("account_code", StringType()),
+    StructField("description", StringType()),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
+<details>
+<summary>Citizen Services (311) schema</summary>
+
+```python
+citizen_services_schema = StructType([
+    StructField("request_id", StringType()),
+    StructField("citizen_id", StringType()),
+    StructField("request_type", StringType()),
+    StructField("department", StringType()),
+    StructField("status", StringType()),
+    StructField("priority", StringType()),
+    StructField("district", IntegerType()),
+    StructField("asset_id", StringType()),
+    StructField("latitude", DecimalType(8, 5)),
+    StructField("longitude", DecimalType(9, 5)),
+    StructField("response_time_hours", IntegerType()),
+    StructField("satisfaction_rating", IntegerType()),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
+<details>
+<summary>K-12 Early Warning schema</summary>
+
+```python
+k12_early_warning_schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("student_id", StringType()),
+    StructField("school_id", StringType()),
+    StructField("event_type", StringType()),
+    StructField("grade_level", IntegerType()),
+    StructField("teacher_id", StringType()),
+    StructField("risk_score", DecimalType(5, 2)),
+    StructField("attendance_rate", DecimalType(5, 2)),
+    StructField("gpa", DecimalType(3, 2)),
+    StructField("behavior_incidents_ytd", IntegerType()),
+    StructField("intervention_type", StringType()),
+    StructField("school_type", StringType()),
+    StructField("free_reduced_lunch", BooleanType()),
+    StructField("english_learner", BooleanType()),
+    StructField("special_education", BooleanType()),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
+<details>
+<summary>Procurement schema</summary>
+
+```python
+procurement_schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("agency_id", StringType()),
+    StructField("vendor_id", StringType()),
+    StructField("event_type", StringType()),
+    StructField("contract_id", StringType()),
+    StructField("amount", DecimalType(14, 2)),
+    StructField("procurement_method", StringType()),
+    StructField("commodity_code", StringType()),
+    StructField("category", StringType()),
+    StructField("minority_owned", BooleanType()),
+    StructField("small_business", BooleanType()),
+    StructField("local_vendor", BooleanType()),
+    StructField("contract_duration_months", IntegerType()),
+    StructField("payment_terms", StringType()),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
+<details>
+<summary>Case Management (HHS) schema</summary>
+
+```python
+case_management_schema = StructType([
+    StructField("event_id", StringType()),
+    StructField("client_id", StringType()),
+    StructField("case_id", StringType()),
+    StructField("caseworker_id", StringType()),
+    StructField("event_type", StringType()),
+    StructField("program", StringType()),
+    StructField("agency_id", StringType()),
+    StructField("benefit_amount", DecimalType(10, 2)),
+    StructField("household_size", IntegerType()),
+    StructField("income_bracket", StringType()),
+    StructField("county", StringType()),
+    StructField("determination", StringType()),
+    StructField("referral_source", StringType()),
+    StructField("priority", StringType()),
+    StructField("event_timestamp", StringType()),
+])
+```
+</details>
+
 ### Elasticsearch (via Caddy proxy)
 
 <details>
@@ -306,6 +578,94 @@ alembic upgrade head
 
 # Rollback
 alembic downgrade -1
+```
+
+---
+
+## Resetting the Environment
+
+### Clear SLED data only (keeps services running)
+
+```bash
+KEY="YOUR_SECRET_KEY"
+API="http://localhost:10800/api/v1"
+
+# Clear all 6 SLED use cases from Neo4j
+for uc in student_enrollment grant_budget citizen_services k12_early_warning procurement case_management; do
+  curl -s -X DELETE -H "X-Api-Key: $KEY" "$API/data-sources/neo4j/sled/$uc/clear"
+done
+
+# Clear all 6 SLED use cases from Postgres
+for uc in student_enrollment grant_budget citizen_services k12_early_warning procurement case_management; do
+  curl -s -X DELETE -H "X-Api-Key: $KEY" "$API/data-sources/sled/$uc/clear"
+done
+```
+
+```python
+sled_use_cases = [
+    "student_enrollment", "grant_budget", "citizen_services",
+    "k12_early_warning", "procurement", "case_management",
+]
+
+# Clear Neo4j
+for uc in sled_use_cases:
+    print(requests.delete(f"{API}/data-sources/neo4j/sled/{uc}/clear", headers=HEADERS).json())
+
+# Clear Postgres
+for uc in sled_use_cases:
+    print(requests.delete(f"{API}/data-sources/sled/{uc}/clear", headers=HEADERS).json())
+```
+
+### Stop all Kafka generators
+
+```bash
+# Stop all running generators, then clean up
+curl -s -H "X-Api-Key: $KEY" "$API/kafka/generators" | \
+  python3 -c "import sys,json;[print(g['generator_id']) for g in json.load(sys.stdin) if g['status']=='running']" | \
+  xargs -I{} curl -s -X POST -H "X-Api-Key: $KEY" "$API/kafka/generators/{}/stop"
+
+curl -s -X DELETE -H "X-Api-Key: $KEY" "$API/kafka/generators/cleanup"
+```
+
+```python
+# Stop all running generators
+for g in requests.get(f"{API}/kafka/generators", headers=HEADERS).json():
+    if g["status"] == "running":
+        requests.post(f"{API}/kafka/generators/{g['generator_id']}/stop", headers=HEADERS)
+
+# Clean up finished generators
+requests.delete(f"{API}/kafka/generators/cleanup", headers=HEADERS).json()
+```
+
+### Full reset (wipe all data volumes)
+
+This destroys **all** data across Postgres, Neo4j, Redis, Kafka, and Elasticsearch. Credentials in `.env` are preserved.
+
+```bash
+docker compose down
+
+# Remove all data volumes
+docker volume rm \
+  data-api-collector-python_postgres_data \
+  data-api-collector-python_neo4j_data \
+  data-api-collector-python_redis_data \
+  data-api-collector-python_kafka_data \
+  data-api-collector-python_elastic_data
+
+# Bring everything back up (Postgres migrations run automatically on start)
+docker compose up -d
+```
+
+### Rotate credentials + full reset
+
+```bash
+# Generate new .env with fresh secrets, then wipe and restart
+./scripts/setup-env.sh
+docker compose down
+docker volume rm \
+  data-api-collector-python_postgres_data \
+  data-api-collector-python_neo4j_data
+docker compose up -d
 ```
 
 ---

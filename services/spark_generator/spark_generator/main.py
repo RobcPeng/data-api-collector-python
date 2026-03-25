@@ -51,6 +51,12 @@ class UseCase(str, Enum):
     fraud_detection = "fraud_detection"
     telemetry = "telemetry"
     web_traffic = "web_traffic"
+    student_enrollment = "student_enrollment"
+    grant_budget = "grant_budget"
+    citizen_services = "citizen_services"
+    k12_early_warning = "k12_early_warning"
+    procurement = "procurement"
+    case_management = "case_management"
 
 
 def _build_fraud_spec(spark: SparkSession, rows: int, num_users: int = 5000, num_merchants: int = 500) -> dg.DataGenerator:
@@ -141,16 +147,246 @@ def _build_web_traffic_spec(spark: SparkSession, rows: int, num_users: int = 100
     )
 
 
+def _build_student_enrollment_spec(spark: SparkSession, rows: int, num_students: int = 15000, num_courses: int = 2000) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="student_enrollment", rows=rows, partitions=2)
+        .withColumn("event_id", "string", expr="uuid()")
+        .withColumn("student_id", "string",
+                    expr="concat('STU-', lpad(cast(int(rand()*15000+1) as string), 5, '0'))")
+        .withColumn("course_id", "string",
+                    expr="concat('CRS-', lpad(cast(int(rand()*2000+1) as string), 4, '0'))")
+        .withColumn("action", "string",
+                    values=["enroll", "drop", "transfer", "grade_posted", "waitlist"],
+                    random=True, weights=[5, 2, 1, 3, 1])
+        .withColumn("semester", "string",
+                    values=["Fall 2024", "Spring 2025", "Summer 2025", "Fall 2025"],
+                    random=True)
+        .withColumn("department", "string",
+                    values=["Computer Science", "Mathematics", "English", "Biology",
+                            "Chemistry", "Physics", "History", "Psychology",
+                            "Business", "Engineering", "Nursing", "Education",
+                            "Art", "Music", "Philosophy", "Political Science",
+                            "Sociology", "Economics"],
+                    random=True)
+        .withColumn("grade", "string",
+                    values=["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F", "W", "IP"],
+                    random=True, weights=[2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 5])
+        .withColumn("credits", "integer", minValue=1, maxValue=4, random=True)
+        .withColumn("campus", "string",
+                    values=["Main", "North", "Online", "Downtown", "West"],
+                    random=True, weights=[4, 2, 3, 2, 1])
+        .withColumn("gpa_impact", "decimal(3,1)", minValue=-4.0, maxValue=4.0, random=True)
+    )
+
+
+def _build_grant_budget_spec(spark: SparkSession, rows: int, num_funds: int = 200, num_vendors: int = 2000) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="grant_budget", rows=rows, partitions=2)
+        .withColumn("transaction_id", "string", expr="uuid()")
+        .withColumn("fund_source_id", "string",
+                    expr="concat('FUND-', lpad(cast(int(rand()*200+1) as string), 3, '0'))")
+        .withColumn("agency_id", "string",
+                    expr="concat('AGY-', lpad(cast(int(rand()*50+1) as string), 3, '0'))")
+        .withColumn("program_id", "string",
+                    expr="concat('PGM-', lpad(cast(int(rand()*500+1) as string), 4, '0'))")
+        .withColumn("vendor_id", "string",
+                    expr="concat('VND-', lpad(cast(int(rand()*2000+1) as string), 4, '0'))")
+        .withColumn("transaction_type", "string",
+                    values=["allocation", "expenditure", "transfer", "encumbrance",
+                            "reimbursement", "adjustment"],
+                    random=True, weights=[2, 5, 2, 2, 1, 1])
+        .withColumn("amount", "decimal(10,2)", minValue=100.0, maxValue=5000000.0, random=True)
+        .withColumn("fund_category", "string",
+                    values=["federal_grant", "state_appropriation", "local_revenue",
+                            "bond_proceeds", "tuition_fees", "endowment", "auxiliary"],
+                    random=True, weights=[4, 3, 2, 1, 3, 1, 1])
+        .withColumn("fiscal_year", "string",
+                    values=["2023", "2024", "2025", "2026"],
+                    random=True, weights=[1, 3, 4, 2])
+        .withColumn("quarter", "string",
+                    values=["Q1", "Q2", "Q3", "Q4"],
+                    random=True)
+        .withColumn("cost_center", "string",
+                    expr="concat('CC-', lpad(cast(int(rand()*300+1) as string), 4, '0'))")
+        .withColumn("account_code", "string",
+                    expr="lpad(cast(int(rand()*9000+1000) as string), 4, '0')")
+        .withColumn("description", "string",
+                    values=["Professional services for", "Equipment purchase -",
+                            "Personnel costs -", "Travel and training -",
+                            "Facilities maintenance -", "Software licensing -",
+                            "Consulting fees for", "Capital improvement -"],
+                    random=True)
+    )
+
+
+def _build_citizen_services_spec(spark: SparkSession, rows: int, num_citizens: int = 50000, num_assets: int = 10000) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="citizen_services", rows=rows, partitions=2)
+        .withColumn("request_id", "string", expr="uuid()")
+        .withColumn("citizen_id", "string",
+                    expr="concat('CIT-', lpad(cast(int(rand()*50000+1) as string), 5, '0'))")
+        .withColumn("request_type", "string",
+                    values=["pothole_repair", "streetlight_outage", "water_main_break",
+                            "noise_complaint", "illegal_dumping", "graffiti_removal",
+                            "tree_trimming", "sidewalk_repair", "traffic_signal",
+                            "building_inspection", "permit_application", "animal_control",
+                            "park_maintenance", "snow_removal"],
+                    random=True, weights=[5, 3, 2, 3, 2, 2, 2, 3, 2, 2, 3, 1, 2, 1])
+        .withColumn("department", "string",
+                    values=["Public Works", "Transportation", "Water", "Code Enforcement",
+                            "Parks", "Building", "Police", "Fire", "Health", "Environmental"],
+                    random=True, weights=[4, 3, 2, 2, 2, 2, 1, 1, 1, 1])
+        .withColumn("status", "string",
+                    values=["opened", "assigned", "in_progress", "pending_review",
+                            "resolved", "closed", "reopened"],
+                    random=True, weights=[3, 3, 4, 2, 3, 4, 1])
+        .withColumn("priority", "string",
+                    values=["critical", "high", "medium", "low"],
+                    random=True, weights=[1, 2, 4, 3])
+        .withColumn("district", "integer", minValue=1, maxValue=15, random=True)
+        .withColumn("asset_id", "string",
+                    expr="concat('AST-', lpad(cast(int(rand()*10000+1) as string), 5, '0'))")
+        .withColumn("latitude", "decimal(8,5)", minValue=38.0, maxValue=42.0, random=True)
+        .withColumn("longitude", "decimal(9,5)", minValue=-78.0, maxValue=-73.0, random=True)
+        .withColumn("response_time_hours", "integer", minValue=1, maxValue=720, random=True)
+        .withColumn("satisfaction_rating", "integer",
+                    values=[1, 2, 3, 4, 5], random=True, weights=[1, 1, 2, 3, 3])
+    )
+
+
+def _build_k12_early_warning_spec(spark: SparkSession, rows: int, num_students: int = 25000, num_schools: int = 100) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="k12_early_warning", rows=rows, partitions=2)
+        .withColumn("event_id", "string", expr="uuid()")
+        .withColumn("student_id", "string",
+                    expr="concat('K12-', lpad(cast(int(rand()*25000+1) as string), 5, '0'))")
+        .withColumn("school_id", "string",
+                    expr="concat('SCH-', lpad(cast(int(rand()*100+1) as string), 3, '0'))")
+        .withColumn("event_type", "string",
+                    values=["attendance", "discipline", "assessment", "intervention",
+                            "counselor_note", "parent_contact", "iep_review", "health_screening"],
+                    random=True, weights=[5, 3, 3, 2, 1, 2, 1, 1])
+        .withColumn("grade_level", "integer", minValue=1, maxValue=12, random=True)
+        .withColumn("teacher_id", "string",
+                    expr="concat('TCH-', lpad(cast(int(rand()*3000+1) as string), 4, '0'))")
+        .withColumn("risk_score", "decimal(5,2)", minValue=0.0, maxValue=100.0, random=True)
+        .withColumn("attendance_rate", "decimal(5,2)", minValue=50.0, maxValue=100.0, random=True)
+        .withColumn("gpa", "decimal(3,2)", minValue=0.0, maxValue=4.0, random=True)
+        .withColumn("behavior_incidents_ytd", "integer", minValue=0, maxValue=25, random=True)
+        .withColumn("intervention_type", "string",
+                    values=["tutoring", "mentoring", "counseling", "parent_conference",
+                            "schedule_change", "behavioral_plan", "none"],
+                    random=True, weights=[2, 2, 2, 1, 1, 1, 5])
+        .withColumn("school_type", "string",
+                    values=["elementary", "middle", "high"],
+                    random=True, weights=[5, 3, 4])
+        .withColumn("free_reduced_lunch", "boolean", expr="rand() < 0.45")
+        .withColumn("english_learner", "boolean", expr="rand() < 0.15")
+        .withColumn("special_education", "boolean", expr="rand() < 0.13")
+    )
+
+
+def _build_procurement_spec(spark: SparkSession, rows: int, num_vendors: int = 3000, num_contracts: int = 5000) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="procurement", rows=rows, partitions=2)
+        .withColumn("event_id", "string", expr="uuid()")
+        .withColumn("agency_id", "string",
+                    expr="concat('AGY-', lpad(cast(int(rand()*50+1) as string), 3, '0'))")
+        .withColumn("vendor_id", "string",
+                    expr="concat('VND-', lpad(cast(int(rand()*3000+1) as string), 4, '0'))")
+        .withColumn("event_type", "string",
+                    values=["rfp_posted", "bid_submitted", "bid_withdrawn", "contract_awarded",
+                            "purchase_order", "invoice_submitted", "invoice_paid",
+                            "contract_amended", "contract_terminated"],
+                    random=True, weights=[2, 4, 1, 2, 3, 3, 3, 1, 1])
+        .withColumn("contract_id", "string",
+                    expr="concat('CTR-', lpad(cast(int(rand()*5000+1) as string), 5, '0'))")
+        .withColumn("amount", "decimal(12,2)", minValue=500.0, maxValue=25000000.0, random=True)
+        .withColumn("procurement_method", "string",
+                    values=["competitive_bid", "sole_source", "emergency",
+                            "cooperative", "micro_purchase", "rfq"],
+                    random=True, weights=[5, 2, 1, 2, 2, 3])
+        .withColumn("commodity_code", "string",
+                    expr="lpad(cast(int(rand()*900+100) as string), 3, '0')")
+        .withColumn("category", "string",
+                    values=["construction", "professional_services", "it_services",
+                            "equipment", "supplies", "facilities", "consulting",
+                            "staffing", "transportation", "utilities"],
+                    random=True, weights=[3, 4, 4, 2, 2, 2, 3, 2, 1, 1])
+        .withColumn("minority_owned", "boolean", expr="rand() < 0.18")
+        .withColumn("small_business", "boolean", expr="rand() < 0.35")
+        .withColumn("local_vendor", "boolean", expr="rand() < 0.40")
+        .withColumn("contract_duration_months", "integer", minValue=1, maxValue=60, random=True)
+        .withColumn("payment_terms", "string",
+                    values=["net_30", "net_45", "net_60", "upon_delivery"],
+                    random=True, weights=[5, 3, 2, 1])
+    )
+
+
+def _build_case_management_spec(spark: SparkSession, rows: int, num_clients: int = 40000, num_cases: int = 60000) -> dg.DataGenerator:
+    return (
+        dg.DataGenerator(spark, name="case_management", rows=rows, partitions=2)
+        .withColumn("event_id", "string", expr="uuid()")
+        .withColumn("client_id", "string",
+                    expr="concat('CLT-', lpad(cast(int(rand()*40000+1) as string), 5, '0'))")
+        .withColumn("case_id", "string",
+                    expr="concat('CASE-', lpad(cast(int(rand()*60000+1) as string), 5, '0'))")
+        .withColumn("caseworker_id", "string",
+                    expr="concat('CW-', lpad(cast(int(rand()*1500+1) as string), 4, '0'))")
+        .withColumn("event_type", "string",
+                    values=["intake", "referral", "eligibility_determination",
+                            "benefit_disbursement", "review", "closure", "appeal", "transfer"],
+                    random=True, weights=[3, 3, 3, 4, 3, 2, 1, 1])
+        .withColumn("program", "string",
+                    values=["SNAP", "Medicaid", "TANF", "WIC", "CHIP",
+                            "housing_assistance", "energy_assistance", "childcare_subsidy",
+                            "unemployment", "disability"],
+                    random=True, weights=[4, 5, 2, 2, 2, 3, 1, 2, 3, 1])
+        .withColumn("agency_id", "string",
+                    expr="concat('HHS-', lpad(cast(int(rand()*30+1) as string), 3, '0'))")
+        .withColumn("benefit_amount", "decimal(10,2)", minValue=0.0, maxValue=15000.0, random=True)
+        .withColumn("household_size", "integer",
+                    values=[1, 2, 3, 4, 5, 6, 7, 8],
+                    random=True, weights=[2, 4, 4, 3, 2, 1, 1, 1])
+        .withColumn("income_bracket", "string",
+                    values=["below_poverty", "low_income", "moderate_income"],
+                    random=True, weights=[4, 4, 2])
+        .withColumn("county", "string",
+                    expr="concat('County-', cast(int(rand()*80+1) as string))")
+        .withColumn("determination", "string",
+                    values=["approved", "denied", "pending", "deferred", "conditional"],
+                    random=True, weights=[5, 2, 3, 1, 2])
+        .withColumn("referral_source", "string",
+                    values=["self", "agency", "community_org", "healthcare", "school", "court"],
+                    random=True, weights=[4, 3, 2, 2, 1, 1])
+        .withColumn("priority", "string",
+                    values=["emergency", "urgent", "standard", "low"],
+                    random=True, weights=[1, 2, 5, 2])
+    )
+
+
 _USE_CASE_BUILDERS = {
     UseCase.fraud_detection: _build_fraud_spec,
     UseCase.telemetry: _build_telemetry_spec,
     UseCase.web_traffic: _build_web_traffic_spec,
+    UseCase.student_enrollment: _build_student_enrollment_spec,
+    UseCase.grant_budget: _build_grant_budget_spec,
+    UseCase.citizen_services: _build_citizen_services_spec,
+    UseCase.k12_early_warning: _build_k12_early_warning_spec,
+    UseCase.procurement: _build_procurement_spec,
+    UseCase.case_management: _build_case_management_spec,
 }
 
 _DEFAULT_TOPICS = {
     UseCase.fraud_detection: "streaming-fraud-transactions",
     UseCase.telemetry: "streaming-device-telemetry",
     UseCase.web_traffic: "streaming-web-traffic",
+    UseCase.student_enrollment: "streaming-student-enrollment",
+    UseCase.grant_budget: "streaming-grant-budget",
+    UseCase.citizen_services: "streaming-citizen-services",
+    UseCase.k12_early_warning: "streaming-k12-early-warning",
+    UseCase.procurement: "streaming-procurement",
+    UseCase.case_management: "streaming-case-management",
 }
 
 # ---------------------------------------------------------------------------
