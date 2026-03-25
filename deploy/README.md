@@ -164,20 +164,23 @@ docker compose up -d
 
 From a laptop, use one of:
 
-**localtunnel** (quickest for API, free, no account — HTTP only):
+**zrok** (free, open source, HTTP + TCP):
 ```bash
-npm install -g localtunnel
-lt --port 10800 --subdomain my-data-api       # REST API (HTTP)
-# localtunnel is HTTP-only — use SSH tunnels for TCP services:
-# ssh -L 9094:localhost:9094 -L 15433:localhost:15433 -L 7687:localhost:7687 user@host
-```
+# Install: https://docs.zrok.io/docs/guides/install/
+curl -sSf https://get.openziti.io/install.bash | sudo bash -s zrok
+zrok invite  # one-time account setup
+zrok enable <token>
 
-**Tailscale** (best for teams):
-```bash
-# Install: https://tailscale.com/download
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-# Access via Tailscale hostname from any machine on your tailnet
+# Expose services (each in a separate terminal)
+zrok share public http://localhost:10800                           # API (public URL)
+zrok share private --backend-mode tcpTunnel 127.0.0.1:9094        # Kafka
+zrok share private --backend-mode tcpTunnel 127.0.0.1:15433       # Postgres
+zrok share private --backend-mode tcpTunnel 127.0.0.1:7687        # Neo4j
+
+# On the client machine, access private shares:
+zrok access private --bind 127.0.0.1:9094 <kafka-token>
+zrok access private --bind 127.0.0.1:15433 <postgres-token>
+zrok access private --bind 127.0.0.1:7687 <neo4j-token>
 ```
 
 **SSH tunnel** (if you have a jump host):

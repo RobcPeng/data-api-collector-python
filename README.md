@@ -920,49 +920,60 @@ All services are accessible on `localhost` at the ports listed in the Services t
 
 When Databricks or other external clients need to reach this stack, you have three main options.
 
-#### Option A: localtunnel + SSH (simplest for dev/demos)
+#### Option A: zrok (simplest for dev/demos)
 
-[localtunnel](https://theboroer.github.io/localtunnel-www/) exposes HTTP services publicly. Free, no account required. Use it for the **API gateway** — then use SSH tunnels for the TCP services (Kafka, Postgres, Neo4j) from Databricks or your client machine.
-
-```bash
-# Install
-npm install -g localtunnel
-
-# Expose the API gateway (HTTP) — gets a URL like https://my-data-api.loca.lt
-lt --port 10800 --subdomain my-data-api
-```
-
-> **Note:** localtunnel is HTTP-only. For TCP services (Kafka, Postgres, Neo4j), use SSH port forwarding from wherever your client runs:
+[zrok](https://zrok.io/) is a free, open-source (Apache 2.0) tunnel built on [OpenZiti](https://openziti.io/). It supports **both HTTP and TCP** tunnels, so it can expose all services — API, Kafka, Postgres, and Neo4j — without separate tools.
 
 ```bash
-# SSH tunnel for TCP services (run from your Databricks driver or client machine)
-ssh -L 9094:localhost:9094 -L 15433:localhost:15433 -L 7687:localhost:7687 user@your-host
+# Install (Linux)
+curl -sSf https://get.openziti.io/install.bash | sudo bash -s zrok
+
+# macOS
+brew install zrok
+
+# One-time setup: create a free account at https://api.zrok.io and enable your environment
+zrok invite    # sends email with token
+zrok enable <token>
 ```
 
-Or if you only need the REST API (generators, SLED populate/clear, custom generators), localtunnel alone is sufficient — all data operations go through HTTP.
-
-> **Tip:** On first connection from a new IP, localtunnel shows a confirmation page. Hit the tunnel URL once from a browser to pass through it.
-
-#### Option B: Tailscale (best for teams)
-
-[Tailscale](https://tailscale.com/) creates a private WireGuard mesh network. Every device on your tailnet can reach every other device by hostname — no port forwarding, no public exposure.
+**Expose the API gateway (HTTP — public, no client setup needed):**
 
 ```bash
-# Install and authenticate
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-
-# Your machine is now reachable as <hostname> on the tailnet
-# From Databricks (if the cluster is also on the tailnet):
-#   Kafka:    <hostname>:9094
-#   Postgres: <hostname>:15433
-#   Neo4j:    <hostname>:7687
-#   API:      <hostname>:10800
+zrok share public http://localhost:10800
+# Outputs a public URL like https://abc123.share.zrok.io
 ```
 
-Tailscale works well for team environments where multiple people need stable access without exposing services to the public internet.
+**Expose TCP services (private — requires `zrok access` on the client):**
 
-#### Option C: Cloud VM / VPS
+```bash
+# Run each in a separate terminal on the host machine
+zrok share private --backend-mode tcpTunnel 127.0.0.1:9094    # Kafka
+zrok share private --backend-mode tcpTunnel 127.0.0.1:15433   # PostgreSQL
+zrok share private --backend-mode tcpTunnel 127.0.0.1:7687    # Neo4j Bolt
+# Each outputs a share token like "abc123xyz"
+```
+
+**Access TCP services (run on your client machine / Databricks driver):**
+
+```bash
+# Install zrok on the client machine too, then:
+zrok access private --bind 127.0.0.1:9094 <kafka-share-token>
+zrok access private --bind 127.0.0.1:15433 <postgres-share-token>
+zrok access private --bind 127.0.0.1:7687 <neo4j-share-token>
+# Now connect to localhost:9094, localhost:15433, localhost:7687 as if local
+```
+
+**Persistent shares (survive restarts):**
+
+```bash
+# Reserve a share token (reusable)
+zrok reserve private --backend-mode tcpTunnel 127.0.0.1:9094
+# Returns a permanent token — use it with `zrok share reserved <token>`
+```
+
+> **When to use:** Quick demos, POCs, sharing with a colleague. No firewall rules or cloud infrastructure needed. The public HTTP share gives instant browser-accessible URLs; private TCP shares give full database/broker access to anyone with the share token.
+
+#### Option B: Cloud VM / VPS
 
 Deploy the stack on an EC2 instance, GCP VM, or Azure VM for persistent, always-on access.
 
@@ -1014,7 +1025,7 @@ Terraform provisions an Ubuntu EC2 instance, installs Docker, clones the repo, g
 See [`deploy/README.md`](deploy/README.md) for full documentation including:
 - **AWS Terraform** — automated EC2 deployment with security groups and bootstrap
 - **Any Cloud VM** — manual setup on GCP, Azure, DigitalOcean, etc.
-- **Docker Desktop** — local development with localtunnel/Tailscale exposure
+- **Docker Desktop** — local development with zrok tunnel exposure
 - **Security recommendations** and port reference
 
 ---
@@ -1042,17 +1053,19 @@ This stack is designed to serve as a local data source that Databricks can conne
 **Network access:** Your Databricks workspace must reach your local services. Options:
 
 - **Same VPC/VNet:** Allow inbound traffic on the relevant ports via security groups
-- **Tunnel (local dev):** Use [localtunnel](https://theboroer.github.io/localtunnel-www/) for the API + SSH tunnels for TCP services, or [Tailscale](https://tailscale.com/) for full access
+- **Tunnel (local dev):** Use [zrok](https://zrok.io/) to expose HTTP + TCP services (free, open source)
 - **Cloud deploy:** Use the included [Terraform scripts](deploy/README.md) for AWS
 - **VPN:** Connect your local network to the Databricks VPC
 
-For localtunnel (API only — HTTP):
+For zrok (HTTP + TCP):
 ```bash
-npm install -g localtunnel
-lt --port 10800 --subdomain my-data-api       # REST API
+zrok share public http://localhost:10800                              # API (public URL)
+zrok share private --backend-mode tcpTunnel 127.0.0.1:9094           # Kafka
+zrok share private --backend-mode tcpTunnel 127.0.0.1:15433          # Postgres
+zrok share private --backend-mode tcpTunnel 127.0.0.1:7687           # Neo4j
 ```
 
-For TCP services (Kafka, Postgres, Neo4j) use SSH tunnels or Tailscale — see [Local Hosting & External Access](#local-hosting--external-access).
+See [Local Hosting & External Access](#local-hosting--external-access) for full setup instructions.
 
 **Databricks secrets:** Store all credentials in Databricks secrets, never hardcode them.
 
