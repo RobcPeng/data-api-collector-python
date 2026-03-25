@@ -30,6 +30,19 @@ A service for sandboxing data ingestion pipelines, streaming data generation, an
 Other services: Elasticsearch :9200, OCR Service :8002
 ```
 
+## Why This Stack / Value Drivers
+
+- **Multi-source data integration sandbox.** One `docker compose up` gives you Kafka streaming, graph (Neo4j), relational (Postgres), key-value (Redis), and search (Elasticsearch) — all pre-wired and talking to each other. No separate installs, no manual plumbing.
+- **Databricks-native design.** Every data source is consumable from Databricks out of the box:
+  - Structured Streaming for Kafka (SASL/SSL, schemas provided)
+  - JDBC and Lakehouse Federation for Postgres
+  - Spark Connector and Bolt protocol for Neo4j
+  - Delta table writes throughout the example notebooks
+- **Realistic SLED data at scale.** Six government and education use cases (student enrollment, grant/budget, citizen services, K-12 early warning, procurement, case management) with rich schemas — weighted distributions, realistic IDs, cross-entity relationships. This is not toy data.
+- **POC acceleration.** Custom generators let SEs and customers define data schemas via JSON and instantly get streaming + graph + relational data without writing code. POST a column spec, get a running Kafka producer or a populated Neo4j graph in seconds.
+- **Self-contained and portable.** Runs on a laptop, a cloud VM, or a CI pipeline. Docker Compose up, one `.env` file, no external dependencies beyond Docker itself.
+- **End-to-end demo flow.** Populate data via the API, stream it to Databricks, query graphs, read tables over JDBC, write results to Delta — all covered in the provided notebooks with working code.
+
 ## Quick Start
 
 ```bash
@@ -886,6 +899,98 @@ docker volume rm \
   data-api-collector-python_neo4j_data
 docker compose up -d
 ```
+
+---
+
+## Local Hosting & External Access
+
+### Quick Start (local only)
+
+```bash
+# Start all services
+docker compose up -d
+
+# Verify everything is healthy
+./tests/test_services.sh
+```
+
+All services are accessible on `localhost` at the ports listed in the Services table above. No additional configuration is needed for local-only use.
+
+### Exposing to external consumers (Databricks, cloud)
+
+When Databricks or other external clients need to reach this stack, you have three main options.
+
+#### Option A: ngrok (simplest for dev/demos)
+
+[ngrok](https://ngrok.com/) creates public tunnels to your local ports. Each tunnel gets a unique hostname.
+
+```bash
+# Expose the Caddy API gateway (HTTP API access)
+ngrok tcp 10800
+
+# Expose Kafka external listener (SASL/PLAIN)
+ngrok tcp 9094
+
+# Expose PostgreSQL SSL port
+ngrok tcp 15433
+
+# Expose Neo4j Bolt
+ngrok tcp 7687
+```
+
+Use the ngrok-assigned hostname and port in your Databricks connection settings. Free tier supports one tunnel at a time — use a paid plan or run multiple ngrok agents for concurrent tunnels.
+
+#### Option B: Tailscale (best for teams)
+
+[Tailscale](https://tailscale.com/) creates a private WireGuard mesh network. Every device on your tailnet can reach every other device by hostname — no port forwarding, no public exposure.
+
+```bash
+# Install and authenticate
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# Your machine is now reachable as <hostname> on the tailnet
+# From Databricks (if the cluster is also on the tailnet):
+#   Kafka:    <hostname>:9094
+#   Postgres: <hostname>:15433
+#   Neo4j:    <hostname>:7687
+#   API:      <hostname>:10800
+```
+
+Tailscale works well for team environments where multiple people need stable access without exposing services to the public internet.
+
+#### Option C: Cloud VM / VPS
+
+Deploy the stack on an EC2 instance, GCP VM, or Azure VM for persistent, always-on access.
+
+- Open the required ports in your security group / firewall rules (see port reference below)
+- Point a DNS name at the VM's public IP
+- Caddy will automatically provision Let's Encrypt certificates for HTTPS if you configure a domain in the Caddyfile
+- For Kafka and Postgres SSL, the stack already includes nginx TLS termination and native SSL — just ensure the cert paths are set in `.env`
+
+### Port reference
+
+| Port | Service | Protocol | External access needed? | Notes |
+|------|---------|----------|------------------------|-------|
+| 10800 | Caddy (HTTP) | HTTP | Yes | API gateway, API key auth on all routes |
+| 10443 | Caddy (HTTPS) | HTTPS | Yes | Auto-HTTPS when domain is configured |
+| 9092 | Kafka (internal) | TCP | No | Plaintext, Docker-internal only |
+| 9094 | Kafka (external) | TCP/SASL | Yes | SASL/PLAIN auth, use for external clients |
+| 9093 | Kafka (SSL) | TCP/SASL_SSL | Yes | nginx TLS termination + SASL auth |
+| 15432 | PostgreSQL (local) | TCP | No | Bound to 127.0.0.1, no SSL |
+| 15433 | PostgreSQL (SSL) | TCP/SSL | Yes | Native SSL with Let's Encrypt certs |
+| 7474 | Neo4j (HTTP) | HTTP | No | Browser UI, typically local only |
+| 7687 | Neo4j (Bolt) | TCP | Yes | Bolt protocol for drivers and Spark connector |
+| 7688 | Neo4j (Bolt+TLS) | TCP/TLS | Yes | nginx TLS termination for Bolt |
+| 16379 | Redis | TCP | Rarely | Only if Databricks connects directly |
+| 9200 | Elasticsearch | HTTP | Rarely | Only if Databricks connects directly |
+
+### SSL/TLS notes
+
+- **Caddy** handles auto-HTTPS natively. When a domain name is configured in the Caddyfile (instead of `:10800`), Caddy provisions and renews Let's Encrypt certificates automatically. No manual cert management needed.
+- **PostgreSQL** exposes native SSL on port `15433`. The entrypoint copies Let's Encrypt certs into the container with correct ownership. Cert paths are configured via `SSL_CERT_PATH` and `SSL_KEY_PATH` in `.env`.
+- **Kafka** uses nginx on port `9093` for TLS termination in front of the SASL/PLAIN listener on `9094`. Databricks connects to `9093` with `SASL_SSL` security protocol.
+- **Neo4j** uses nginx on port `7688` for TLS termination in front of the Bolt listener on `7687`. Use `bolt+s://<host>:7688` for encrypted connections.
 
 ---
 
