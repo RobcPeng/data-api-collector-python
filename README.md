@@ -920,25 +920,30 @@ All services are accessible on `localhost` at the ports listed in the Services t
 
 When Databricks or other external clients need to reach this stack, you have three main options.
 
-#### Option A: ngrok (simplest for dev/demos)
+#### Option A: localtunnel (simplest for dev/demos)
 
-[ngrok](https://ngrok.com/) creates public tunnels to your local ports. Each tunnel gets a unique hostname.
+[localtunnel](https://theboroer.github.io/localtunnel-www/) creates public tunnels to your local ports. Free, no account required, supports multiple tunnels concurrently.
 
 ```bash
-# Expose the Caddy API gateway (HTTP API access)
-ngrok tcp 10800
+# Install
+npm install -g localtunnel
 
-# Expose Kafka external listener (SASL/PLAIN)
-ngrok tcp 9094
+# Expose the API gateway — gets a URL like https://xyz.loca.lt
+lt --port 10800
 
-# Expose PostgreSQL SSL port
-ngrok tcp 15433
+# Expose with a custom subdomain (reusable across sessions)
+lt --port 10800 --subdomain my-data-api
 
-# Expose Neo4j Bolt
-ngrok tcp 7687
+# Expose multiple services in parallel (run each in a separate terminal)
+lt --port 10800 --subdomain my-data-api      # API
+lt --port 9094 --subdomain my-data-kafka      # Kafka
+lt --port 15433 --subdomain my-data-postgres  # PostgreSQL
+lt --port 7687 --subdomain my-data-neo4j      # Neo4j Bolt
 ```
 
-Use the ngrok-assigned hostname and port in your Databricks connection settings. Free tier supports one tunnel at a time — use a paid plan or run multiple ngrok agents for concurrent tunnels.
+Use the assigned `https://*.loca.lt` URL in your Databricks connection settings. Note: localtunnel URLs use HTTPS by default, so adjust your client protocol accordingly.
+
+> **Tip:** On first connection from a new IP, localtunnel shows a confirmation page. Automated clients (like Databricks) may need to pass through this by hitting the tunnel URL once from a browser, or use the `--print-requests` flag for debugging.
 
 #### Option B: Tailscale (best for teams)
 
@@ -1011,7 +1016,7 @@ Terraform provisions an Ubuntu EC2 instance, installs Docker, clones the repo, g
 See [`deploy/README.md`](deploy/README.md) for full documentation including:
 - **AWS Terraform** — automated EC2 deployment with security groups and bootstrap
 - **Any Cloud VM** — manual setup on GCP, Azure, DigitalOcean, etc.
-- **Docker Desktop** — local development with ngrok/Tailscale exposure
+- **Docker Desktop** — local development with localtunnel/Tailscale exposure
 - **Security recommendations** and port reference
 
 ---
@@ -1039,16 +1044,16 @@ This stack is designed to serve as a local data source that Databricks can conne
 **Network access:** Your Databricks workspace must reach your local services. Options:
 
 - **Same VPC/VNet:** Allow inbound traffic on the relevant ports via security groups
-- **Tunnel (local dev):** Use [ngrok](https://ngrok.com/) or [Tailscale](https://tailscale.com/) to expose local ports
+- **Tunnel (local dev):** Use [localtunnel](https://theboroer.github.io/localtunnel-www/) or [Tailscale](https://tailscale.com/) to expose local ports
+- **Cloud deploy:** Use the included [Terraform scripts](deploy/README.md) for AWS
 - **VPN:** Connect your local network to the Databricks VPC
 
-For ngrok:
+For localtunnel:
 ```bash
-# Expose Kafka
-ngrok tcp 9092
-
-# Expose PostgreSQL
-ngrok tcp 15432
+npm install -g localtunnel
+lt --port 10800 --subdomain my-data-api       # API
+lt --port 9094 --subdomain my-data-kafka       # Kafka
+lt --port 15433 --subdomain my-data-postgres   # PostgreSQL
 ```
 
 **Databricks secrets:** Store all credentials in Databricks secrets, never hardcode them.

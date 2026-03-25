@@ -164,12 +164,12 @@ docker compose up -d
 
 From a laptop, use one of:
 
-**ngrok** (quickest):
+**localtunnel** (quickest, free, no account):
 ```bash
-# Install: https://ngrok.com/download
-ngrok http 10800                    # API
-ngrok tcp 9094                      # Kafka
-ngrok tcp 15433                     # Postgres
+npm install -g localtunnel
+lt --port 10800 --subdomain my-data-api       # API
+lt --port 9094 --subdomain my-data-kafka       # Kafka
+lt --port 15433 --subdomain my-data-postgres   # Postgres
 ```
 
 **Tailscale** (best for teams):
