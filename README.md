@@ -551,6 +551,225 @@ curl -H "X-Api-Key: $KEY" http://localhost:10800/elasticsearch/_cluster/health
 requests.get("http://localhost:10800/elasticsearch/_cluster/health", headers=HEADERS).json()
 ```
 
+### Custom Data Generators (Experimental)
+
+Define ad-hoc data generators via JSON and POST them to the API — no server code changes needed. Designed for POCs from Databricks or any HTTP client.
+
+#### Custom Kafka Generators
+
+POST a column spec that maps to [dbldatagen's](https://github.com/databrickslabs/dbldatagen) `withColumn()` API. The service builds a `DataGenerator`, streams batches to Kafka, and injects `event_timestamp` automatically.
+
+**Column spec options:** `expr` (Spark SQL), `values`/`weights` (categorical), `min_value`/`max_value` (ranges), `template`, `unique_values`, `percent_nulls`, `begin`/`end` (dates), `base_column`.
+
+<details>
+<summary>curl</summary>
+
+```bash
+# Validate a spec (dry run — returns resolved schema + sample row)
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "iot_sensors",
+    "topic_name": "custom-iot-data",
+    "columns": [
+      {"name": "device_id", "type": "string", "expr": "concat('"'"'DEV-'"'"', lpad(cast(int(rand()*500+1) as string), 4, '"'"'0'"'"'))"},
+      {"name": "temp_celsius", "type": "decimal(5,2)", "min_value": -20.0, "max_value": 120.0, "random": true},
+      {"name": "status", "type": "string", "values": ["online", "offline", "error"], "weights": [8, 1, 1]}
+    ]
+  }' http://localhost:10800/api/v1/kafka/generators/custom/validate
+
+# Start the generator
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "iot_sensors",
+    "topic_name": "custom-iot-data",
+    "rows_per_batch": 50,
+    "batch_interval_seconds": 2.0,
+    "timeout_minutes": 15,
+    "columns": [
+      {"name": "device_id", "type": "string", "expr": "concat('"'"'DEV-'"'"', lpad(cast(int(rand()*500+1) as string), 4, '"'"'0'"'"'))"},
+      {"name": "temp_celsius", "type": "decimal(5,2)", "min_value": -20.0, "max_value": 120.0, "random": true},
+      {"name": "status", "type": "string", "values": ["online", "offline", "error"], "weights": [8, 1, 1]},
+      {"name": "battery_pct", "type": "integer", "min_value": 0, "max_value": 100, "random": true}
+    ]
+  }' http://localhost:10800/api/v1/kafka/generators/custom/start
+
+# List / stop / get spec
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/kafka/generators/custom
+curl -X POST -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/kafka/generators/custom/{id}/stop
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/kafka/generators/custom/{id}/spec
+```
+</details>
+
+```python
+# Define and start a custom Kafka generator from Databricks
+resp = requests.post(f"{API}/kafka/generators/custom/start", headers=HEADERS, json={
+    "name": "iot_sensors",
+    "topic_name": "custom-iot-data",
+    "rows_per_batch": 50,
+    "batch_interval_seconds": 2.0,
+    "timeout_minutes": 15,
+    "columns": [
+        {"name": "device_id", "type": "string", "expr": "concat('DEV-', lpad(cast(int(rand()*500+1) as string), 4, '0'))"},
+        {"name": "temp_celsius", "type": "decimal(5,2)", "min_value": -20.0, "max_value": 120.0, "random": True},
+        {"name": "status", "type": "string", "values": ["online", "offline", "error"], "weights": [8, 1, 1]},
+        {"name": "battery_pct", "type": "integer", "min_value": 0, "max_value": 100, "random": True},
+    ],
+})
+print(resp.json())
+
+# Validate without starting (returns schema + sample row)
+requests.post(f"{API}/kafka/generators/custom/validate", headers=HEADERS, json={...}).json()
+
+# List running custom generators
+requests.get(f"{API}/kafka/generators/custom", headers=HEADERS).json()
+
+# Get the spec back (for cloning/debugging)
+requests.get(f"{API}/kafka/generators/custom/{generator_id}/spec", headers=HEADERS).json()
+
+# Stop
+requests.post(f"{API}/kafka/generators/custom/{generator_id}/stop", headers=HEADERS).json()
+```
+
+#### Custom Neo4j Graph Generators
+
+Define node types (label, count, properties) and relationships (type, probability, fan-out) via JSON.
+
+**Property generator types:** `uuid`, `sequence`, `choice`, `range_int`, `range_float`, `bool`, `date`, `timestamp`, `name`, `email`, `phone`, `address`, `constant`, `null_or`.
+
+<details>
+<summary>curl</summary>
+
+```bash
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "org_chart",
+    "clear_before": true,
+    "nodes": [
+      {"label": "Employee", "count": 500, "properties": [
+        {"name": "emp_id", "generator_rule": {"generator": "sequence", "prefix": "EMP-", "width": 5}},
+        {"name": "name", "generator_rule": {"generator": "name"}},
+        {"name": "dept", "generator_rule": {"generator": "choice", "values": ["Engineering", "Sales", "HR"]}}
+      ]},
+      {"label": "Office", "count": 5, "properties": [
+        {"name": "city", "generator_rule": {"generator": "choice", "values": ["NYC", "SF", "Chicago"]}}
+      ]}
+    ],
+    "relationships": [
+      {"type": "WORKS_IN", "from_label": "Employee", "to_label": "Office", "probability": 0.25, "max_per_source": 1}
+    ]
+  }' http://localhost:10800/api/v1/data-sources/neo4j/custom/start
+```
+</details>
+
+```python
+resp = requests.post(f"{API}/data-sources/neo4j/custom/start", headers=HEADERS, json={
+    "name": "org_chart",
+    "clear_before": True,
+    "nodes": [
+        {"label": "Employee", "count": 500, "properties": [
+            {"name": "emp_id", "generator_rule": {"generator": "sequence", "prefix": "EMP-", "width": 5}},
+            {"name": "name", "generator_rule": {"generator": "name"}},
+            {"name": "department", "generator_rule": {"generator": "choice", "values": ["Engineering", "Sales", "HR", "Finance"]}},
+            {"name": "salary", "generator_rule": {"generator": "range_int", "min": 50000, "max": 200000}},
+        ]},
+        {"label": "Office", "count": 10, "properties": [
+            {"name": "city", "generator_rule": {"generator": "choice", "values": ["NYC", "SF", "Chicago", "Austin"]}},
+        ]},
+    ],
+    "relationships": [
+        {"type": "WORKS_IN", "from_label": "Employee", "to_label": "Office", "probability": 0.15, "max_per_source": 1},
+        {"type": "REPORTS_TO", "from_label": "Employee", "to_label": "Employee", "probability": 0.003, "max_per_source": 1},
+    ],
+})
+print(resp.json())
+
+# List jobs / check status
+requests.get(f"{API}/data-sources/neo4j/custom", headers=HEADERS).json()
+requests.get(f"{API}/data-sources/neo4j/custom/{job_id}", headers=HEADERS).json()
+
+# Clear nodes created by a specific job
+requests.delete(f"{API}/data-sources/neo4j/custom/{job_id}/clear", headers=HEADERS).json()
+```
+
+#### Custom PostgreSQL Table Generators
+
+Define table schemas and column generation rules. Tables are auto-prefixed with `custom_` to avoid collisions.
+
+<details>
+<summary>curl</summary>
+
+```bash
+curl -X POST -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "survey",
+    "table_name": "survey_responses",
+    "num_records": 10000,
+    "columns": [
+      {"name": "id", "sql_type": "VARCHAR(40)", "primary_key": true, "generator_rule": {"generator": "uuid"}},
+      {"name": "respondent", "sql_type": "VARCHAR(100)", "generator_rule": {"generator": "name"}},
+      {"name": "score", "sql_type": "INT", "generator_rule": {"generator": "range_int", "min": 1, "max": 10}},
+      {"name": "feedback", "sql_type": "VARCHAR(20)", "generator_rule": {"generator": "choice", "values": ["positive", "neutral", "negative"]}}
+    ]
+  }' http://localhost:10800/api/v1/data-sources/custom/start
+
+# Get schema and sample rows
+curl -H "X-Api-Key: $KEY" http://localhost:10800/api/v1/data-sources/custom/{id}/schema
+curl -H "X-Api-Key: $KEY" "http://localhost:10800/api/v1/data-sources/custom/{id}/sample?limit=5"
+```
+</details>
+
+```python
+resp = requests.post(f"{API}/data-sources/custom/start", headers=HEADERS, json={
+    "name": "survey",
+    "table_name": "survey_responses",
+    "num_records": 10000,
+    "drop_existing": True,
+    "columns": [
+        {"name": "response_id", "sql_type": "VARCHAR(40)", "primary_key": True, "generator_rule": {"generator": "uuid"}},
+        {"name": "respondent", "sql_type": "VARCHAR(100)", "generator_rule": {"generator": "name"}},
+        {"name": "score", "sql_type": "INT", "generator_rule": {"generator": "range_int", "min": 1, "max": 10}},
+        {"name": "category", "sql_type": "VARCHAR(20)", "generator_rule": {"generator": "choice", "values": ["positive", "neutral", "negative"], "weights": [5, 3, 2]}},
+        {"name": "submitted_at", "sql_type": "DATE", "generator_rule": {"generator": "date", "start": "2024-01-01", "end": "2025-12-31"}},
+    ],
+})
+print(resp.json())
+
+# Check schema / sample rows
+requests.get(f"{API}/data-sources/custom/{job_id}/schema", headers=HEADERS).json()
+requests.get(f"{API}/data-sources/custom/{job_id}/sample?limit=5", headers=HEADERS).json()
+
+# Drop the table
+requests.delete(f"{API}/data-sources/custom/{job_id}/drop", headers=HEADERS).json()
+```
+
+#### Custom Generator Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/kafka/generators/custom/health` | GET | Health check |
+| `/kafka/generators/custom/validate` | POST | Dry-run validation (returns schema + sample) |
+| `/kafka/generators/custom/start` | POST | Start a custom Kafka generator |
+| `/kafka/generators/custom` | GET | List all custom Kafka generators |
+| `/kafka/generators/custom/{id}` | GET | Get status |
+| `/kafka/generators/custom/{id}/spec` | GET | Get the column spec back |
+| `/kafka/generators/custom/{id}/stop` | POST | Stop a running generator |
+| `/kafka/generators/custom/cleanup` | DELETE | Remove finished generators |
+| `/data-sources/neo4j/custom/health` | GET | Health check |
+| `/data-sources/neo4j/custom/start` | POST | Generate custom graph |
+| `/data-sources/neo4j/custom` | GET | List jobs |
+| `/data-sources/neo4j/custom/{id}` | GET | Get job status |
+| `/data-sources/neo4j/custom/{id}/clear` | DELETE | Clear nodes by job |
+| `/data-sources/neo4j/custom/cleanup` | DELETE | Remove finished jobs |
+| `/data-sources/custom/health` | GET | Health check |
+| `/data-sources/custom/start` | POST | Generate custom table |
+| `/data-sources/custom` | GET | List jobs |
+| `/data-sources/custom/{id}` | GET | Get job status |
+| `/data-sources/custom/{id}/schema` | GET | Get table schema |
+| `/data-sources/custom/{id}/sample` | GET | Get sample rows |
+| `/data-sources/custom/{id}/clear` | DELETE | Truncate table |
+| `/data-sources/custom/{id}/drop` | DELETE | Drop table |
+| `/data-sources/custom/cleanup` | DELETE | Remove finished jobs |
+
 ## Testing
 
 ```bash
@@ -1082,6 +1301,8 @@ data-api-collector-python/
 │           ├── kafka_generators.py # Proxy to spark-generator
 │           ├── redis.py            # Redis set/get
 │           ├── sled.py             # SLED populate/clear (Neo4j + Postgres)
+│           ├── kafka_custom_generators.py  # Experimental: custom Kafka generators
+│           ├── custom_generators.py        # Experimental: custom Neo4j + Postgres generators
 │           ├── ollama_test.py      # Ollama connectivity
 │           ├── llms.py             # LLM endpoints (WIP)
 │           └── service_ocr.py      # OCR service proxy
