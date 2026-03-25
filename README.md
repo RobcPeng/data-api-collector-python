@@ -920,30 +920,28 @@ All services are accessible on `localhost` at the ports listed in the Services t
 
 When Databricks or other external clients need to reach this stack, you have three main options.
 
-#### Option A: localtunnel (simplest for dev/demos)
+#### Option A: localtunnel + SSH (simplest for dev/demos)
 
-[localtunnel](https://theboroer.github.io/localtunnel-www/) creates public tunnels to your local ports. Free, no account required, supports multiple tunnels concurrently.
+[localtunnel](https://theboroer.github.io/localtunnel-www/) exposes HTTP services publicly. Free, no account required. Use it for the **API gateway** — then use SSH tunnels for the TCP services (Kafka, Postgres, Neo4j) from Databricks or your client machine.
 
 ```bash
 # Install
 npm install -g localtunnel
 
-# Expose the API gateway — gets a URL like https://xyz.loca.lt
-lt --port 10800
-
-# Expose with a custom subdomain (reusable across sessions)
+# Expose the API gateway (HTTP) — gets a URL like https://my-data-api.loca.lt
 lt --port 10800 --subdomain my-data-api
-
-# Expose multiple services in parallel (run each in a separate terminal)
-lt --port 10800 --subdomain my-data-api      # API
-lt --port 9094 --subdomain my-data-kafka      # Kafka
-lt --port 15433 --subdomain my-data-postgres  # PostgreSQL
-lt --port 7687 --subdomain my-data-neo4j      # Neo4j Bolt
 ```
 
-Use the assigned `https://*.loca.lt` URL in your Databricks connection settings. Note: localtunnel URLs use HTTPS by default, so adjust your client protocol accordingly.
+> **Note:** localtunnel is HTTP-only. For TCP services (Kafka, Postgres, Neo4j), use SSH port forwarding from wherever your client runs:
 
-> **Tip:** On first connection from a new IP, localtunnel shows a confirmation page. Automated clients (like Databricks) may need to pass through this by hitting the tunnel URL once from a browser, or use the `--print-requests` flag for debugging.
+```bash
+# SSH tunnel for TCP services (run from your Databricks driver or client machine)
+ssh -L 9094:localhost:9094 -L 15433:localhost:15433 -L 7687:localhost:7687 user@your-host
+```
+
+Or if you only need the REST API (generators, SLED populate/clear, custom generators), localtunnel alone is sufficient — all data operations go through HTTP.
+
+> **Tip:** On first connection from a new IP, localtunnel shows a confirmation page. Hit the tunnel URL once from a browser to pass through it.
 
 #### Option B: Tailscale (best for teams)
 
@@ -1044,17 +1042,17 @@ This stack is designed to serve as a local data source that Databricks can conne
 **Network access:** Your Databricks workspace must reach your local services. Options:
 
 - **Same VPC/VNet:** Allow inbound traffic on the relevant ports via security groups
-- **Tunnel (local dev):** Use [localtunnel](https://theboroer.github.io/localtunnel-www/) or [Tailscale](https://tailscale.com/) to expose local ports
+- **Tunnel (local dev):** Use [localtunnel](https://theboroer.github.io/localtunnel-www/) for the API + SSH tunnels for TCP services, or [Tailscale](https://tailscale.com/) for full access
 - **Cloud deploy:** Use the included [Terraform scripts](deploy/README.md) for AWS
 - **VPN:** Connect your local network to the Databricks VPC
 
-For localtunnel:
+For localtunnel (API only — HTTP):
 ```bash
 npm install -g localtunnel
-lt --port 10800 --subdomain my-data-api       # API
-lt --port 9094 --subdomain my-data-kafka       # Kafka
-lt --port 15433 --subdomain my-data-postgres   # PostgreSQL
+lt --port 10800 --subdomain my-data-api       # REST API
 ```
+
+For TCP services (Kafka, Postgres, Neo4j) use SSH tunnels or Tailscale — see [Local Hosting & External Access](#local-hosting--external-access).
 
 **Databricks secrets:** Store all credentials in Databricks secrets, never hardcode them.
 

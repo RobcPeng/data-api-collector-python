@@ -164,12 +164,12 @@ docker compose up -d
 
 From a laptop, use one of:
 
-**localtunnel** (quickest, free, no account):
+**localtunnel** (quickest for API, free, no account — HTTP only):
 ```bash
 npm install -g localtunnel
-lt --port 10800 --subdomain my-data-api       # API
-lt --port 9094 --subdomain my-data-kafka       # Kafka
-lt --port 15433 --subdomain my-data-postgres   # Postgres
+lt --port 10800 --subdomain my-data-api       # REST API (HTTP)
+# localtunnel is HTTP-only — use SSH tunnels for TCP services:
+# ssh -L 9094:localhost:9094 -L 15433:localhost:15433 -L 7687:localhost:7687 user@host
 ```
 
 **Tailscale** (best for teams):
