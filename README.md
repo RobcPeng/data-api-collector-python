@@ -992,6 +992,28 @@ Deploy the stack on an EC2 instance, GCP VM, or Azure VM for persistent, always-
 - **Kafka** uses nginx on port `9093` for TLS termination in front of the SASL/PLAIN listener on `9094`. Databricks connects to `9093` with `SASL_SSL` security protocol.
 - **Neo4j** uses nginx on port `7688` for TLS termination in front of the Bolt listener on `7687`. Use `bolt+s://<host>:7688` for encrypted connections.
 
+### Cloud Deployment (Terraform)
+
+For persistent, always-on deployment, use the included Terraform scripts to provision an EC2 instance with the full stack pre-configured.
+
+```bash
+cd deploy/aws
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars — set key_name, allowed_cidr_blocks
+
+terraform init
+terraform plan
+terraform apply
+```
+
+Terraform provisions an Ubuntu EC2 instance, installs Docker, clones the repo, generates secrets, and starts the stack automatically. Outputs include the public IP, API URL, and SSH command.
+
+See [`deploy/README.md`](deploy/README.md) for full documentation including:
+- **AWS Terraform** — automated EC2 deployment with security groups and bootstrap
+- **Any Cloud VM** — manual setup on GCP, Azure, DigitalOcean, etc.
+- **Docker Desktop** — local development with ngrok/Tailscale exposure
+- **Security recommendations** and port reference
+
 ---
 
 ## Databricks Integration
@@ -1384,6 +1406,14 @@ data-api-collector-python/
 │   ├── postgres_jdbc.ipynb        # SLED table populate + JDBC reads
 │   ├── custom_kafka.ipynb         # Custom Kafka generators (experimental)
 │   └── custom_neo4j_postgres.ipynb # Custom Neo4j + Postgres generators (experimental)
+├── deploy/
+│   ├── README.md                  # Full deployment guide (AWS, cloud VM, local)
+│   └── aws/                       # Terraform scripts for AWS EC2
+│       ├── main.tf                # EC2 instance + security group
+│       ├── variables.tf           # Configurable variables
+│       ├── outputs.tf             # Instance IP, URLs, SSH command
+│       ├── user_data.sh           # Bootstrap script (Docker, clone, start)
+│       └── terraform.tfvars.example
 ├── scripts/
 │   └── setup-env.sh               # Generate .env with strong secrets
 ├── tests/
