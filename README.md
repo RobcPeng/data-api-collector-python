@@ -672,7 +672,17 @@ docker compose up -d
 
 ## Databricks Integration
 
-A ready-to-run Databricks notebook is included at **[`example.ipynb`](example.ipynb)**. Import it into your workspace, update `HOST` and configure your secret scope, and run it. It covers all services: Kafka streaming (all 3 use cases), Neo4j, PostgreSQL, and REST API health checks.
+Import the example notebooks into your Databricks workspace. All notebooks share configuration from a single file — update `HOST` and your secret scope once in `_config`.
+
+| Notebook | Description |
+|---|---|
+| [`example.ipynb`](example.ipynb) | Quick start — health checks + one test per service |
+| [`examples/_config.ipynb`](examples/_config.ipynb) | Shared configuration — HOST, secrets, Kafka options, helper functions |
+| [`examples/kafka_streaming.ipynb`](examples/kafka_streaming.ipynb) | 9 Kafka streaming use cases (core + SLED) with schemas and readStream |
+| [`examples/neo4j_graph.ipynb`](examples/neo4j_graph.ipynb) | Populate SLED graph data + Cypher queries per use case |
+| [`examples/postgres_jdbc.ipynb`](examples/postgres_jdbc.ipynb) | Populate SLED relational tables + JDBC reads with Spark aggregations |
+
+Each capability notebook runs `%run ./_config` to load shared settings. The quick start runs `%run ./examples/_config`.
 
 This stack is designed to serve as a local data source that Databricks can connect to for streaming ingestion, batch reads, and graph queries. Below are connection instructions for each service.
 
@@ -1040,44 +1050,51 @@ data-api-collector-python/
 ├── startup.sh
 ├── .env.example
 ├── .gitignore
+├── example.ipynb                  # Quick start notebook (Databricks)
+├── examples/
+│   ├── _config.ipynb              # Shared config — HOST, secrets, helpers
+│   ├── kafka_streaming.ipynb      # 9 Kafka streaming use cases (core + SLED)
+│   ├── neo4j_graph.ipynb          # SLED graph populate + Cypher queries
+│   └── postgres_jdbc.ipynb        # SLED table populate + JDBC reads
 ├── scripts/
-│   └── setup-env.sh              # Generate .env with strong secrets
+│   └── setup-env.sh               # Generate .env with strong secrets
 ├── tests/
-│   └── test_services.sh          # Comprehensive test suite (60 tests)
+│   └── test_services.sh           # Comprehensive test suite (60 tests)
 ├── docs/
 │   ├── testing-and-databricks-integration.md
 │   └── security-hardening.md
 ├── app/
 │   ├── main.py
 │   ├── core/
-│   │   ├── config.py             # Pydantic settings from .env
-│   │   ├── database.py           # PostgreSQL (SQLAlchemy)
-│   │   └── neo_database.py       # Neo4j client
+│   │   ├── config.py              # Pydantic settings from .env
+│   │   ├── database.py            # PostgreSQL (SQLAlchemy)
+│   │   └── neo_database.py        # Neo4j client
 │   ├── models/
-│   │   └── events.py             # SQLAlchemy + Pydantic models
+│   │   └── events.py              # SQLAlchemy + Pydantic models
 │   ├── schemas/
 │   │   └── events.py
 │   └── api/
 │       └── endpoints/
-│           ├── __init__.py        # Router aggregation
-│           ├── data_sources.py    # PostgreSQL endpoints
-│           ├── neo4j.py           # Neo4j endpoints
-│           ├── kafka.py           # Kafka produce/consume
+│           ├── __init__.py         # Router aggregation
+│           ├── data_sources.py     # PostgreSQL endpoints
+│           ├── neo4j.py            # Neo4j endpoints
+│           ├── kafka.py            # Kafka produce/consume
 │           ├── kafka_generators.py # Proxy to spark-generator
-│           ├── redis.py           # Redis set/get
-│           ├── ollama_test.py     # Ollama connectivity
-│           ├── llms.py            # LLM endpoints (WIP)
-│           └── service_ocr.py     # OCR service proxy
+│           ├── redis.py            # Redis set/get
+│           ├── sled.py             # SLED populate/clear (Neo4j + Postgres)
+│           ├── ollama_test.py      # Ollama connectivity
+│           ├── llms.py             # LLM endpoints (WIP)
+│           └── service_ocr.py      # OCR service proxy
 ├── services/
-│   ├── spark_generator/           # PySpark + dbldatagen service
+│   ├── spark_generator/            # PySpark + dbldatagen (core + SLED)
 │   │   ├── Dockerfile
 │   │   ├── pyproject.toml
 │   │   └── spark_generator/
 │   │       └── main.py
-│   └── ocr_service/               # Document analysis service
+│   └── ocr_service/                # Document analysis service
 │       ├── Dockerfile
 │       ├── pyproject.toml
 │       └── ocr_service/
 │           └── main.py
-└── migrations/                    # Alembic database migrations
+└── migrations/                     # Alembic database migrations
 ```
