@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Optional
 
 from confluent_kafka import Producer
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from pyspark.sql import SparkSession
 
