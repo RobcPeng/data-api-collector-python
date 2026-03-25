@@ -900,6 +900,8 @@ Import the example notebooks into your Databricks workspace. All notebooks share
 | [`examples/kafka_streaming.ipynb`](examples/kafka_streaming.ipynb) | 9 Kafka streaming use cases (core + SLED) with schemas and readStream |
 | [`examples/neo4j_graph.ipynb`](examples/neo4j_graph.ipynb) | Populate SLED graph data + Cypher queries per use case |
 | [`examples/postgres_jdbc.ipynb`](examples/postgres_jdbc.ipynb) | Populate SLED relational tables + JDBC reads with Spark aggregations |
+| [`examples/custom_kafka.ipynb`](examples/custom_kafka.ipynb) | Custom Kafka generators — IoT, clickstream, healthcare vitals examples |
+| [`examples/custom_neo4j_postgres.ipynb`](examples/custom_neo4j_postgres.ipynb) | Custom Neo4j graphs + Postgres tables — org chart, supply chain, survey, fleet examples |
 
 Each capability notebook runs `%run ./_config` to load shared settings. The quick start runs `%run ./examples/_config`.
 
@@ -1274,7 +1276,9 @@ data-api-collector-python/
 │   ├── _config.ipynb              # Shared config — HOST, secrets, helpers
 │   ├── kafka_streaming.ipynb      # 9 Kafka streaming use cases (core + SLED)
 │   ├── neo4j_graph.ipynb          # SLED graph populate + Cypher queries
-│   └── postgres_jdbc.ipynb        # SLED table populate + JDBC reads
+│   ├── postgres_jdbc.ipynb        # SLED table populate + JDBC reads
+│   ├── custom_kafka.ipynb         # Custom Kafka generators (experimental)
+│   └── custom_neo4j_postgres.ipynb # Custom Neo4j + Postgres generators (experimental)
 ├── scripts/
 │   └── setup-env.sh               # Generate .env with strong secrets
 ├── tests/
