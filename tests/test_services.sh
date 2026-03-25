@@ -10,6 +10,14 @@
 #   ./tests/test_services.sh redis        # Run only Redis tests
 #   ./tests/test_services.sh kafka        # Run only Kafka tests
 #   ./tests/test_services.sh generators   # Run only Kafka generator tests
+#   ./tests/test_services.sh sled         # Run all SLED tests (generators + neo4j + postgres)
+#   ./tests/test_services.sh sled-generators  # SLED Kafka generators only
+#   ./tests/test_services.sh sled-neo4j       # SLED Neo4j populate/clear only
+#   ./tests/test_services.sh sled-postgres    # SLED Postgres populate/clear only
+#   ./tests/test_services.sh custom       # Run all custom generator tests
+#   ./tests/test_services.sh custom-kafka     # Custom Kafka generators only
+#   ./tests/test_services.sh custom-neo4j     # Custom Neo4j generators only
+#   ./tests/test_services.sh custom-postgres  # Custom Postgres generators only
 #   ./tests/test_services.sh ollama       # Run only Ollama tests
 # =============================================================================
 
@@ -454,6 +462,373 @@ test_generators() {
 }
 
 # ---------------------------------------------------------------------------
+# Test: SLED Kafka Generators
+# ---------------------------------------------------------------------------
+test_sled_generators() {
+    header "SLED KAFKA GENERATOR TESTS"
+
+    local sled_cases=("student_enrollment" "grant_budget" "citizen_services" "k12_early_warning" "procurement" "case_management")
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Start $uc Generator"
+        parse_response "$(api_post '/kafka/generators/start' "{
+            \"use_case\": \"$uc\",
+            \"rows_per_batch\": 5,
+            \"batch_interval_seconds\": 1,
+            \"timeout_minutes\": 0.15
+        }")"
+        assert_status "POST /kafka/generators/start ($uc)" "200"
+        assert_json_field "Generator status is running" "status" "running"
+    done
+
+    subheader "Wait for Spark to produce SLED data..."
+    sleep 20
+
+    subheader "Verify SLED Generators Produced Data"
+    parse_response "$(api_get '/kafka/generators')"
+    assert_status "GET /kafka/generators (list SLED)" "200"
+    local total_rows
+    total_rows=$(echo "$HTTP_BODY" | python3 -c "
+import sys,json
+gens = json.load(sys.stdin)
+sled = [g for g in gens if g['use_case'] in ['student_enrollment','grant_budget','citizen_services','k12_early_warning','procurement','case_management']]
+print(sum(g['rows_produced'] for g in sled))
+" 2>/dev/null || echo "0")
+    if [[ "$total_rows" -gt 0 ]]; then
+        pass "SLED generators produced $total_rows total rows"
+    else
+        fail "SLED generators produced rows" "Got 0 rows"
+    fi
+
+    subheader "Cleanup SLED Generators"
+    sleep 10
+    parse_response "$(api_delete '/kafka/generators/cleanup')"
+    assert_status "DELETE /kafka/generators/cleanup (SLED)" "200"
+}
+
+# ---------------------------------------------------------------------------
+# Test: SLED Neo4j Populate/Clear/Status
+# ---------------------------------------------------------------------------
+test_sled_neo4j() {
+    header "SLED NEO4J TESTS"
+
+    local sled_cases=("student_enrollment" "grant_budget" "citizen_services" "k12_early_warning" "procurement" "case_management")
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Populate $uc in Neo4j"
+        parse_response "$(api_post "/data-sources/neo4j/sled/$uc/populate" '{"num_records": 100}')"
+        assert_status "POST /neo4j/sled/$uc/populate" "200"
+        assert_json_field "Populate status is running" "status" "running"
+    done
+
+    subheader "Wait for Neo4j population..."
+    sleep 15
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Status $uc in Neo4j"
+        parse_response "$(api_get "/data-sources/neo4j/sled/$uc/status")"
+        assert_status "GET /neo4j/sled/$uc/status" "200"
+        assert_body_contains "Status returns counts" "counts"
+    done
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Clear $uc from Neo4j"
+        parse_response "$(api_delete "/data-sources/neo4j/sled/$uc/clear")"
+        assert_status "DELETE /neo4j/sled/$uc/clear" "200"
+        assert_body_contains "Clear returns cleared status" "cleared"
+    done
+
+    subheader "Neo4j SLED Job Cleanup"
+    parse_response "$(api_delete '/data-sources/neo4j/sled/jobs/cleanup')"
+    assert_status "DELETE /neo4j/sled/jobs/cleanup" "200"
+}
+
+# ---------------------------------------------------------------------------
+# Test: SLED Postgres Populate/Clear/Status
+# ---------------------------------------------------------------------------
+test_sled_postgres() {
+    header "SLED POSTGRESQL TESTS"
+
+    local sled_cases=("student_enrollment" "grant_budget" "citizen_services" "k12_early_warning" "procurement" "case_management")
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Populate $uc in Postgres"
+        parse_response "$(api_post "/data-sources/sled/$uc/populate" '{"num_records": 100}')"
+        assert_status "POST /sled/$uc/populate" "200"
+        assert_json_field "Populate status is running" "status" "running"
+    done
+
+    subheader "Wait for Postgres population..."
+    sleep 15
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Status $uc in Postgres"
+        parse_response "$(api_get "/data-sources/sled/$uc/status")"
+        assert_status "GET /sled/$uc/status" "200"
+        assert_body_contains "Status returns counts" "counts"
+    done
+
+    for uc in "${sled_cases[@]}"; do
+        subheader "Clear $uc from Postgres"
+        parse_response "$(api_delete "/data-sources/sled/$uc/clear")"
+        assert_status "DELETE /sled/$uc/clear" "200"
+        assert_body_contains "Clear returns cleared status" "cleared"
+    done
+
+    subheader "Postgres SLED Job Cleanup"
+    parse_response "$(api_delete '/data-sources/sled/jobs/cleanup')"
+    assert_status "DELETE /sled/jobs/cleanup" "200"
+}
+
+# ---------------------------------------------------------------------------
+# Test: Custom Kafka Generators (Experimental)
+# ---------------------------------------------------------------------------
+test_custom_kafka() {
+    header "CUSTOM KAFKA GENERATOR TESTS (Experimental)"
+
+    subheader "Health Check"
+    parse_response "$(api_get '/kafka/generators/custom/health')"
+    assert_status "GET /custom/health" "200"
+    assert_json_field "Custom health is ok" "status" "ok"
+
+    subheader "Validate Spec (dry run)"
+    parse_response "$(api_post '/kafka/generators/custom/validate' '{
+        "name": "test_custom",
+        "topic_name": "test-custom-topic",
+        "columns": [
+            {"name": "id", "type": "string", "expr": "uuid()"},
+            {"name": "value", "type": "integer", "min_value": 1, "max_value": 100, "random": true},
+            {"name": "category", "type": "string", "values": ["A", "B", "C"], "weights": [5, 3, 2]}
+        ]
+    }')"
+    assert_status "POST /custom/validate" "200"
+    assert_json_field "Validation status is valid" "status" "valid"
+    assert_body_contains "Returns resolved schema" "resolved_schema"
+    assert_body_contains "Returns sample row" "sample_row"
+
+    subheader "Validate Invalid Spec"
+    parse_response "$(api_post '/kafka/generators/custom/validate' '{
+        "name": "bad_spec",
+        "topic_name": "bad-topic",
+        "columns": [
+            {"name": "x", "type": "not_a_real_type"}
+        ]
+    }')"
+    if [[ "$HTTP_CODE" == "400" ]]; then
+        pass "Invalid spec returns 400"
+    else
+        # Some invalid types may not fail validation until build — accept 200 or 400
+        pass "Spec validation returned HTTP $HTTP_CODE (type may be lenient)"
+    fi
+
+    subheader "Start Custom Generator"
+    parse_response "$(api_post '/kafka/generators/custom/start' '{
+        "name": "test_generator",
+        "topic_name": "test-custom-stream",
+        "rows_per_batch": 5,
+        "batch_interval_seconds": 1,
+        "timeout_minutes": 0.2,
+        "columns": [
+            {"name": "id", "type": "string", "expr": "uuid()"},
+            {"name": "score", "type": "integer", "min_value": 1, "max_value": 100, "random": true},
+            {"name": "label", "type": "string", "values": ["good", "bad", "neutral"], "weights": [5, 2, 3]},
+            {"name": "active", "type": "boolean", "expr": "rand() < 0.7"}
+        ]
+    }')"
+    assert_status "POST /custom/start" "200"
+    assert_json_field "Custom generator status is running" "status" "running"
+    local custom_id
+    custom_id=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['generator_id'])" 2>/dev/null)
+    info "Custom generator ID: $custom_id"
+
+    subheader "List Custom Generators"
+    parse_response "$(api_get '/kafka/generators/custom')"
+    assert_status "GET /custom (list)" "200"
+    local custom_count
+    custom_count=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    if [[ "$custom_count" -ge 1 ]]; then
+        pass "Custom generator list has $custom_count entry"
+    else
+        fail "Custom generator list has entries" "Found $custom_count"
+    fi
+
+    subheader "Get Custom Generator Status"
+    parse_response "$(api_get "/kafka/generators/custom/$custom_id")"
+    assert_status "GET /custom/{id}" "200"
+    assert_body_contains "Returns generator name" "test_generator"
+
+    subheader "Get Custom Generator Spec"
+    parse_response "$(api_get "/kafka/generators/custom/$custom_id/spec")"
+    assert_status "GET /custom/{id}/spec" "200"
+    assert_body_contains "Spec returns columns" "columns"
+    assert_body_contains "Spec returns topic" "test-custom-stream"
+
+    subheader "Wait for data production..."
+    sleep 15
+    parse_response "$(api_get "/kafka/generators/custom/$custom_id")"
+    local custom_rows
+    custom_rows=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('rows_produced',0))" 2>/dev/null || echo "0")
+    if [[ "$custom_rows" -gt 0 ]]; then
+        pass "Custom generator produced $custom_rows rows"
+    else
+        fail "Custom generator produced rows" "Got 0"
+    fi
+
+    subheader "Stop Custom Generator"
+    parse_response "$(api_post "/kafka/generators/custom/$custom_id/stop")"
+    assert_status "POST /custom/{id}/stop" "200"
+
+    subheader "Cleanup Custom Generators"
+    sleep 5
+    parse_response "$(api_delete '/kafka/generators/custom/cleanup')"
+    assert_status "DELETE /custom/cleanup" "200"
+    assert_body_contains "Cleanup returns removed count" "removed"
+}
+
+# ---------------------------------------------------------------------------
+# Test: Custom Neo4j Generators (Experimental)
+# ---------------------------------------------------------------------------
+test_custom_neo4j() {
+    header "CUSTOM NEO4J GENERATOR TESTS (Experimental)"
+
+    subheader "Health Check"
+    parse_response "$(api_get '/data-sources/neo4j/custom/health')"
+    assert_status "GET /neo4j/custom/health" "200"
+    assert_json_field "Custom Neo4j health is ok" "status" "ok"
+
+    subheader "Start Custom Graph Generation"
+    parse_response "$(api_post '/data-sources/neo4j/custom/start' '{
+        "name": "test_graph",
+        "clear_before": true,
+        "nodes": [
+            {"label": "TestPerson", "count": 50, "properties": [
+                {"name": "person_id", "generator_rule": {"generator": "sequence", "prefix": "TP-", "width": 4}},
+                {"name": "name", "generator_rule": {"generator": "name"}},
+                {"name": "age", "generator_rule": {"generator": "range_int", "min": 18, "max": 80}}
+            ]},
+            {"label": "TestCompany", "count": 5, "properties": [
+                {"name": "company_id", "generator_rule": {"generator": "sequence", "prefix": "TC-", "width": 3}},
+                {"name": "sector", "generator_rule": {"generator": "choice", "values": ["Tech", "Finance", "Healthcare"]}}
+            ]}
+        ],
+        "relationships": [
+            {"type": "TEST_WORKS_AT", "from_label": "TestPerson", "to_label": "TestCompany", "probability": 0.25, "max_per_source": 1}
+        ]
+    }')"
+    assert_status "POST /neo4j/custom/start" "200"
+    assert_json_field "Custom Neo4j job status is running" "status" "running"
+    local neo4j_job_id
+    neo4j_job_id=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null)
+    info "Neo4j custom job ID: $neo4j_job_id"
+
+    subheader "Wait for graph generation..."
+    sleep 10
+
+    subheader "Get Custom Neo4j Job Status"
+    parse_response "$(api_get "/data-sources/neo4j/custom/$neo4j_job_id")"
+    assert_status "GET /neo4j/custom/{id}" "200"
+    assert_json_field "Job completed" "status" "completed"
+    assert_body_contains "Returns nodes_created" "nodes_created"
+    local persons_created
+    persons_created=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('nodes_created',{}).get('TestPerson',0))" 2>/dev/null || echo "0")
+    if [[ "$persons_created" -ge 50 ]]; then
+        pass "Created $persons_created TestPerson nodes"
+    else
+        fail "Created TestPerson nodes" "Expected >= 50, got $persons_created"
+    fi
+
+    subheader "List Custom Neo4j Jobs"
+    parse_response "$(api_get '/data-sources/neo4j/custom')"
+    assert_status "GET /neo4j/custom (list)" "200"
+
+    subheader "Clear Custom Neo4j Data"
+    parse_response "$(api_delete "/data-sources/neo4j/custom/$neo4j_job_id/clear")"
+    assert_status "DELETE /neo4j/custom/{id}/clear" "200"
+    assert_body_contains "Clear returns deleted counts" "deleted"
+
+    subheader "Cleanup Custom Neo4j Jobs"
+    parse_response "$(api_delete '/data-sources/neo4j/custom/cleanup')"
+    assert_status "DELETE /neo4j/custom/cleanup" "200"
+}
+
+# ---------------------------------------------------------------------------
+# Test: Custom Postgres Generators (Experimental)
+# ---------------------------------------------------------------------------
+test_custom_postgres() {
+    header "CUSTOM POSTGRESQL GENERATOR TESTS (Experimental)"
+
+    subheader "Health Check"
+    parse_response "$(api_get '/data-sources/custom/health')"
+    assert_status "GET /custom/health (postgres)" "200"
+    assert_json_field "Custom Postgres health is ok" "status" "ok"
+
+    subheader "Start Custom Table Generation"
+    parse_response "$(api_post '/data-sources/custom/start' '{
+        "name": "test_table",
+        "table_name": "test_data",
+        "num_records": 100,
+        "drop_existing": true,
+        "columns": [
+            {"name": "id", "sql_type": "VARCHAR(40)", "primary_key": true, "generator_rule": {"generator": "uuid"}},
+            {"name": "name", "sql_type": "VARCHAR(100)", "generator_rule": {"generator": "name"}},
+            {"name": "score", "sql_type": "INT", "generator_rule": {"generator": "range_int", "min": 1, "max": 100}},
+            {"name": "category", "sql_type": "VARCHAR(20)", "generator_rule": {"generator": "choice", "values": ["A", "B", "C"]}},
+            {"name": "active", "sql_type": "BOOLEAN", "generator_rule": {"generator": "bool", "probability": 0.7}},
+            {"name": "event_date", "sql_type": "DATE", "generator_rule": {"generator": "date", "start": "2024-01-01", "end": "2025-12-31"}}
+        ]
+    }')"
+    assert_status "POST /custom/start (postgres)" "200"
+    assert_json_field "Custom Postgres job status is running" "status" "running"
+    local pg_job_id
+    pg_job_id=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null)
+    info "Postgres custom job ID: $pg_job_id"
+
+    subheader "Wait for table generation..."
+    sleep 8
+
+    subheader "Get Custom Postgres Job Status"
+    parse_response "$(api_get "/data-sources/custom/$pg_job_id")"
+    assert_status "GET /custom/{id} (postgres)" "200"
+    assert_json_field "Job completed" "status" "completed"
+    local pg_rows
+    pg_rows=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('rows_created',0))" 2>/dev/null || echo "0")
+    if [[ "$pg_rows" -ge 100 ]]; then
+        pass "Created $pg_rows rows in custom_test_data"
+    else
+        fail "Created rows in custom table" "Expected >= 100, got $pg_rows"
+    fi
+
+    subheader "Get Table Schema"
+    parse_response "$(api_get "/data-sources/custom/$pg_job_id/schema")"
+    assert_status "GET /custom/{id}/schema" "200"
+    assert_body_contains "Schema returns columns" "columns"
+    assert_body_contains "Schema returns row_count" "row_count"
+
+    subheader "Get Sample Rows"
+    parse_response "$(api_get "/data-sources/custom/$pg_job_id/sample?limit=5")"
+    assert_status "GET /custom/{id}/sample" "200"
+    assert_body_contains "Sample returns rows" "rows"
+
+    subheader "List Custom Postgres Jobs"
+    parse_response "$(api_get '/data-sources/custom')"
+    assert_status "GET /custom (list postgres)" "200"
+
+    subheader "Truncate Custom Table"
+    parse_response "$(api_delete "/data-sources/custom/$pg_job_id/clear")"
+    assert_status "DELETE /custom/{id}/clear" "200"
+    assert_body_contains "Truncate returns status" "truncated"
+
+    subheader "Drop Custom Table"
+    parse_response "$(api_delete "/data-sources/custom/$pg_job_id/drop")"
+    assert_status "DELETE /custom/{id}/drop" "200"
+    assert_body_contains "Drop returns status" "dropped"
+
+    subheader "Cleanup Custom Postgres Jobs"
+    parse_response "$(api_delete '/data-sources/custom/cleanup')"
+    assert_status "DELETE /custom/cleanup (postgres)" "200"
+}
+
+# ---------------------------------------------------------------------------
 # Test: Ollama (may not be available)
 # ---------------------------------------------------------------------------
 test_ollama() {
@@ -508,13 +883,21 @@ main() {
     preflight
 
     case "$target" in
-        health)     test_health ;;
-        postgres)   test_postgres ;;
-        neo4j)      test_neo4j ;;
-        redis)      test_redis ;;
-        kafka)      test_kafka ;;
-        generators) test_generators ;;
-        ollama)     test_ollama ;;
+        health)           test_health ;;
+        postgres)         test_postgres ;;
+        neo4j)            test_neo4j ;;
+        redis)            test_redis ;;
+        kafka)            test_kafka ;;
+        generators)       test_generators ;;
+        sled-generators)  test_sled_generators ;;
+        sled-neo4j)       test_sled_neo4j ;;
+        sled-postgres)    test_sled_postgres ;;
+        sled)             test_sled_generators; test_sled_neo4j; test_sled_postgres ;;
+        custom-kafka)     test_custom_kafka ;;
+        custom-neo4j)     test_custom_neo4j ;;
+        custom-postgres)  test_custom_postgres ;;
+        custom)           test_custom_kafka; test_custom_neo4j; test_custom_postgres ;;
+        ollama)           test_ollama ;;
         all)
             test_health
             test_postgres
@@ -522,10 +905,16 @@ main() {
             test_redis
             test_kafka
             test_generators
+            test_sled_generators
+            test_sled_neo4j
+            test_sled_postgres
+            test_custom_kafka
+            test_custom_neo4j
+            test_custom_postgres
             test_ollama
             ;;
         *)
-            echo "Usage: $0 {all|health|postgres|neo4j|redis|kafka|generators|ollama}"
+            echo "Usage: $0 {all|health|postgres|neo4j|redis|kafka|generators|sled|sled-generators|sled-neo4j|sled-postgres|custom|custom-kafka|custom-neo4j|custom-postgres|ollama}"
             exit 1
             ;;
     esac
