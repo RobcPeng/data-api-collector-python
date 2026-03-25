@@ -563,3 +563,306 @@ async def cleanup_generators():
     for gid in to_remove:
         del _active_generators[gid]
     return {"removed": len(to_remove), "active": len(_active_generators)}
+
+
+# ---------------------------------------------------------------------------
+# EXPERIMENTAL: Custom DataGenerator endpoints
+# ---------------------------------------------------------------------------
+# Accepts a JSON column spec that maps to dbldatagen's withColumn() API.
+# Lets users define generators from Databricks/Python and POST them.
+# ---------------------------------------------------------------------------
+
+_active_custom_generators: dict[str, dict] = {}
+
+
+class ColumnSpec(BaseModel):
+    """Maps to a single dg.DataGenerator.withColumn() call."""
+    name: str = Field(..., description="Column name")
+    type: str = Field(default="string", description="Spark SQL type: string, integer, long, float, double, decimal(p,s), boolean, date, timestamp")
+    # Value generation — use ONE of these approaches:
+    expr: Optional[str] = Field(None, description="Spark SQL expression, e.g. 'uuid()', 'rand() < 0.3', 'concat(...)'")
+    values: Optional[list] = Field(None, description="Fixed set of values to pick from")
+    weights: Optional[list[int]] = Field(None, description="Weights for values (must match length of values)")
+    min_value: Optional[float] = Field(None, description="Min value for range-based generation")
+    max_value: Optional[float] = Field(None, description="Max value for range-based generation")
+    # Modifiers
+    random: Optional[bool] = Field(None, description="Randomize value selection (default: sequential)")
+    unique_values: Optional[int] = Field(None, description="Number of distinct values to generate")
+    template: Optional[str] = Field(None, description="String template with \\0 substitution, e.g. 'user_\\0'")
+    percent_nulls: Optional[float] = Field(None, description="Percentage of null values (0-100)")
+    omit: Optional[bool] = Field(None, description="If true, column is used for generation but omitted from output")
+    begin: Optional[str] = Field(None, description="Start value for date/timestamp ranges, e.g. '2023-01-01'")
+    end: Optional[str] = Field(None, description="End value for date/timestamp ranges, e.g. '2025-12-31'")
+    interval: Optional[str] = Field(None, description="Interval for date/timestamp generation, e.g. 'days=1'")
+    base_column: Optional[str] = Field(None, description="Name of column to derive values from")
+
+
+class CustomGeneratorRequest(BaseModel):
+    """Start a custom generator from a JSON column specification."""
+    name: str = Field(..., min_length=1, max_length=100, description="Generator name (used for identification)")
+    topic_name: str = Field(..., min_length=1, description="Kafka topic to produce to")
+    columns: list[ColumnSpec] = Field(..., min_length=1, description="Column definitions")
+    rows_per_batch: int = Field(default=100, ge=1, le=10000)
+    batch_interval_seconds: float = Field(default=1.0, ge=0.1, le=60.0)
+    timeout_minutes: float = Field(default=10.0, ge=0.1, le=1440.0)
+    partitions: int = Field(default=2, ge=1, le=16, description="Spark partitions for data generation")
+    inject_timestamp: bool = Field(default=True, description="Auto-inject event_timestamp field")
+
+
+class CustomGeneratorStatus(BaseModel):
+    generator_id: str
+    name: str
+    topic_name: str
+    status: str
+    rows_produced: int
+    started_at: str
+    elapsed_seconds: float
+    timeout_minutes: float
+    rows_per_batch: int
+    batch_interval_seconds: float
+    columns: int
+    error: Optional[str] = None
+
+
+def _build_custom_spec(spark: SparkSession, columns: list[ColumnSpec], rows: int, partitions: int) -> dg.DataGenerator:
+    """Build a DataGenerator from a list of ColumnSpec definitions."""
+    gen = dg.DataGenerator(spark, name="custom_generator", rows=rows, partitions=partitions)
+
+    for col_spec in columns:
+        kwargs = {}
+
+        # Value generation
+        if col_spec.expr is not None:
+            kwargs["expr"] = col_spec.expr
+        if col_spec.values is not None:
+            kwargs["values"] = col_spec.values
+        if col_spec.weights is not None:
+            kwargs["weights"] = col_spec.weights
+        if col_spec.min_value is not None:
+            kwargs["minValue"] = col_spec.min_value
+        if col_spec.max_value is not None:
+            kwargs["maxValue"] = col_spec.max_value
+
+        # Modifiers
+        if col_spec.random is not None:
+            kwargs["random"] = col_spec.random
+        if col_spec.unique_values is not None:
+            kwargs["uniqueValues"] = col_spec.unique_values
+        if col_spec.template is not None:
+            kwargs["template"] = col_spec.template
+        if col_spec.percent_nulls is not None:
+            kwargs["percentNulls"] = col_spec.percent_nulls / 100.0
+        if col_spec.omit is not None:
+            kwargs["omit"] = col_spec.omit
+        if col_spec.begin is not None:
+            kwargs["begin"] = col_spec.begin
+        if col_spec.end is not None:
+            kwargs["end"] = col_spec.end
+        if col_spec.interval is not None:
+            kwargs["interval"] = col_spec.interval
+        if col_spec.base_column is not None:
+            kwargs["baseColumn"] = col_spec.base_column
+
+        gen = gen.withColumn(col_spec.name, col_spec.type, **kwargs)
+
+    return gen
+
+
+def _generate_custom_batch(spark: SparkSession, columns: list[ColumnSpec], rows: int, partitions: int) -> list[str]:
+    """Build and collect a custom batch."""
+    spec = _build_custom_spec(spark, columns, rows, partitions)
+    df = spec.build()
+    return df.toJSON().collect()
+
+
+async def _custom_generator_loop(generator_id: str, state: dict):
+    loop = asyncio.get_running_loop()
+    spark = await loop.run_in_executor(None, _get_spark)
+    producer = _get_producer()
+
+    topic: str = state["topic_name"]
+    columns: list[ColumnSpec] = state["columns"]
+    rows_per_batch: int = state["rows_per_batch"]
+    interval: float = state["batch_interval_seconds"]
+    timeout_sec: float = state["timeout_minutes"] * 60
+    partitions: int = state["partitions"]
+    inject_ts: bool = state["inject_timestamp"]
+
+    start = time.monotonic()
+
+    try:
+        while state["status"] == "running":
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout_sec:
+                state["status"] = "completed"
+                break
+
+            rows = await loop.run_in_executor(
+                None, _generate_custom_batch, spark, columns, rows_per_batch, partitions
+            )
+
+            for row_json in rows:
+                record = json.loads(row_json)
+                if inject_ts:
+                    record["event_timestamp"] = datetime.now(timezone.utc).isoformat()
+                producer.produce(topic, json.dumps(record).encode("utf-8"))
+                state["rows_produced"] += 1
+
+            producer.flush()
+            state["elapsed_seconds"] = time.monotonic() - start
+            await asyncio.sleep(interval)
+
+    except asyncio.CancelledError:
+        state["status"] = "stopped"
+    except Exception as e:
+        state["status"] = "error"
+        state["error"] = str(e)
+    finally:
+        producer.flush()
+        state["elapsed_seconds"] = time.monotonic() - start
+        if state["status"] == "running":
+            state["status"] = "completed"
+
+
+def _build_custom_status(state: dict) -> CustomGeneratorStatus:
+    return CustomGeneratorStatus(
+        generator_id=state["generator_id"],
+        name=state["name"],
+        topic_name=state["topic_name"],
+        status=state["status"],
+        rows_produced=state["rows_produced"],
+        started_at=state["started_at"],
+        elapsed_seconds=state["elapsed_seconds"],
+        timeout_minutes=state["timeout_minutes"],
+        rows_per_batch=state["rows_per_batch"],
+        batch_interval_seconds=state["batch_interval_seconds"],
+        columns=len(state["columns"]),
+        error=state.get("error"),
+    )
+
+
+@app.get("/custom/health")
+async def custom_health():
+    """Health check for custom generator endpoints."""
+    return {
+        "status": "ok",
+        "service": "custom-generators",
+        "active": len([s for s in _active_custom_generators.values() if s["status"] == "running"]),
+        "total": len(_active_custom_generators),
+    }
+
+
+@app.post("/custom/validate")
+async def validate_custom_spec(request: CustomGeneratorRequest):
+    """Validate a custom generator spec without starting it. Returns the resolved schema."""
+    try:
+        spark = _get_spark()
+        spec = _build_custom_spec(spark, request.columns, rows=1, partitions=1)
+        df = spec.build()
+        schema = [{"name": f.name, "type": str(f.dataType)} for f in df.schema.fields]
+        sample = json.loads(df.toJSON().first()) if df.count() > 0 else {}
+        return {
+            "status": "valid",
+            "name": request.name,
+            "topic_name": request.topic_name,
+            "columns": len(request.columns),
+            "resolved_schema": schema,
+            "sample_row": sample,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid generator spec: {str(e)}")
+
+
+@app.post("/custom/start", response_model=CustomGeneratorStatus)
+async def start_custom_generator(request: CustomGeneratorRequest):
+    """Start a custom generator from a JSON column specification."""
+    generator_id = str(uuid.uuid4())[:8]
+
+    # Validate the spec first
+    try:
+        spark = _get_spark()
+        spec = _build_custom_spec(spark, request.columns, rows=1, partitions=1)
+        spec.build()  # test build
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid generator spec: {str(e)}")
+
+    state = {
+        "generator_id": generator_id,
+        "name": request.name,
+        "topic_name": request.topic_name,
+        "status": "running",
+        "rows_produced": 0,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "elapsed_seconds": 0.0,
+        "timeout_minutes": request.timeout_minutes,
+        "rows_per_batch": request.rows_per_batch,
+        "batch_interval_seconds": request.batch_interval_seconds,
+        "columns": request.columns,
+        "partitions": request.partitions,
+        "inject_timestamp": request.inject_timestamp,
+    }
+
+    task = asyncio.create_task(_custom_generator_loop(generator_id, state))
+    state["_task"] = task
+    _active_custom_generators[generator_id] = state
+
+    return _build_custom_status(state)
+
+
+@app.post("/custom/{generator_id}/stop", response_model=CustomGeneratorStatus)
+async def stop_custom_generator(generator_id: str):
+    """Stop a running custom generator."""
+    state = _active_custom_generators.get(generator_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Custom generator {generator_id} not found")
+
+    if state["status"] == "running":
+        state["status"] = "stopped"
+        task: asyncio.Task = state.get("_task")
+        if task and not task.done():
+            task.cancel()
+
+    return _build_custom_status(state)
+
+
+@app.get("/custom", response_model=list[CustomGeneratorStatus])
+async def list_custom_generators():
+    """List all custom generators and their status."""
+    return [_build_custom_status(s) for s in _active_custom_generators.values()]
+
+
+@app.get("/custom/{generator_id}", response_model=CustomGeneratorStatus)
+async def get_custom_generator(generator_id: str):
+    """Get status of a specific custom generator."""
+    state = _active_custom_generators.get(generator_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Custom generator {generator_id} not found")
+    return _build_custom_status(state)
+
+
+@app.get("/custom/{generator_id}/spec")
+async def get_custom_generator_spec(generator_id: str):
+    """Get the column spec for a custom generator (useful for cloning/debugging)."""
+    state = _active_custom_generators.get(generator_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Custom generator {generator_id} not found")
+    return {
+        "generator_id": generator_id,
+        "name": state["name"],
+        "topic_name": state["topic_name"],
+        "columns": [col.model_dump(exclude_none=True) for col in state["columns"]],
+        "rows_per_batch": state["rows_per_batch"],
+        "batch_interval_seconds": state["batch_interval_seconds"],
+        "timeout_minutes": state["timeout_minutes"],
+        "partitions": state["partitions"],
+        "inject_timestamp": state["inject_timestamp"],
+    }
+
+
+@app.delete("/custom/cleanup")
+async def cleanup_custom_generators():
+    """Remove all completed/stopped/errored custom generators."""
+    to_remove = [gid for gid, s in _active_custom_generators.items() if s["status"] != "running"]
+    for gid in to_remove:
+        del _active_custom_generators[gid]
+    return {"removed": len(to_remove), "active": len(_active_custom_generators)}

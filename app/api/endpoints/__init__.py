@@ -9,6 +9,9 @@ from .service_ocr import router as service_ocr_router
 from .kafka_generators import router as kafka_generators_router
 from .sled import neo4j_router as sled_neo4j_router
 from .sled import postgres_router as sled_postgres_router
+from .kafka_custom_generators import router as kafka_custom_generators_router
+from .custom_generators import neo4j_router as custom_neo4j_router
+from .custom_generators import postgres_router as custom_postgres_router
 # Create main router that combines all endpoint routers
 router = APIRouter(prefix="/api/v1")
 
@@ -23,6 +26,9 @@ router.include_router(ollama_test_router)
 router.include_router(service_ocr_router)
 router.include_router(sled_neo4j_router)
 router.include_router(sled_postgres_router)
+router.include_router(kafka_custom_generators_router)
+router.include_router(custom_neo4j_router)
+router.include_router(custom_postgres_router)
 
 
 
