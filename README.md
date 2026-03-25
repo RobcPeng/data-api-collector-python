@@ -1000,7 +1000,7 @@ Import the example notebooks into your Databricks workspace. All notebooks share
 
 | Notebook | Description |
 |---|---|
-| [`example.ipynb`](example.ipynb) | Quick start — health checks + one test per service |
+| [`examples/quickstart.ipynb`](examples/quickstart.ipynb) | Quick start — health checks + one test per service |
 | [`examples/_config.ipynb`](examples/_config.ipynb) | Shared configuration — HOST, secrets, Kafka options, helper functions |
 | [`examples/kafka_streaming.ipynb`](examples/kafka_streaming.ipynb) | 9 Kafka streaming use cases (core + SLED) with schemas and readStream |
 | [`examples/neo4j_graph.ipynb`](examples/neo4j_graph.ipynb) | Populate SLED graph data + Cypher queries per use case |
@@ -1376,8 +1376,8 @@ data-api-collector-python/
 ├── startup.sh
 ├── .env.example
 ├── .gitignore
-├── example.ipynb                  # Quick start notebook (Databricks)
 ├── examples/
+│   ├── quickstart.ipynb           # Quick start — health checks + connectivity test
 │   ├── _config.ipynb              # Shared config — HOST, secrets, helpers
 │   ├── kafka_streaming.ipynb      # 9 Kafka streaming use cases (core + SLED)
 │   ├── neo4j_graph.ipynb          # SLED graph populate + Cypher queries
