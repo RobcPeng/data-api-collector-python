@@ -5,15 +5,15 @@ variable "aws_region" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. t3.large (2 vCPU, 8 GB) is the minimum for the full stack."
+  description = "EC2 instance type. t3.medium (2 vCPU, 4 GB) works for the default stack. Use t3.large if enabling Elasticsearch or OCR profiles."
   type        = string
-  default     = "t3.large"
+  default     = "t3.medium"
 }
 
 variable "volume_size" {
-  description = "Root EBS volume size in GB. 50 GB recommended for model caches and data volumes."
+  description = "Root EBS volume size in GB. 30 GB is sufficient for the default stack. Increase to 50+ if enabling OCR (model caches)."
   type        = number
-  default     = 50
+  default     = 30
 }
 
 variable "key_name" {

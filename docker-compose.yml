@@ -30,6 +30,7 @@ services:
   elasticsearch:
     image: elasticsearch:9.1.2
     container_name: data-api-elasticsearch
+    profiles: ["elasticsearch"]
     user: "1000:1000"
     environment:
       - discovery.type=single-node

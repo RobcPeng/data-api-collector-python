@@ -80,8 +80,8 @@ terraform destroy
 | Variable | Default | Description |
 |---|---|---|
 | `aws_region` | `us-east-1` | AWS region |
-| `instance_type` | `t3.large` | EC2 instance type (min: t3.large for full stack) |
-| `volume_size` | `50` | Root volume size in GB |
+| `instance_type` | `t3.medium` | EC2 instance type (use t3.large if enabling ES/OCR) |
+| `volume_size` | `30` | Root volume size in GB (50+ for OCR model caches) |
 | `key_name` | `""` | EC2 key pair name for SSH |
 | `allowed_cidr_blocks` | `["0.0.0.0/0"]` | CIDRs allowed to access the stack |
 | `git_repo` | GitHub URL | Repository to clone |
@@ -97,8 +97,8 @@ Works on AWS, GCP, Azure, DigitalOcean, Linode, or any VPS with Ubuntu 22.04+.
 
 ### 1. Provision a VM
 
-- **Minimum specs**: 2 vCPU, 8 GB RAM, 50 GB disk
-- **Recommended**: 4 vCPU, 16 GB RAM (for OCR service or large data generation)
+- **Minimum specs**: 2 vCPU, 4 GB RAM, 30 GB disk (default stack)
+- **Recommended**: 2 vCPU, 8 GB RAM, 50 GB disk (if enabling Elasticsearch or OCR profiles)
 - **OS**: Ubuntu 22.04 or 24.04
 - **Ports**: Open 22, 10800, 9093, 9094, 15433, 7688
 

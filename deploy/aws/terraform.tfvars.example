@@ -5,8 +5,12 @@
 # =============================================================================
 
 aws_region  = "us-east-1"
-instance_type = "t3.large"       # 2 vCPU, 8 GB — minimum for full stack
-volume_size   = 50               # GB — room for model caches and data
+instance_type = "t3.medium"      # 2 vCPU, 4 GB — sufficient for default stack (~$30/mo)
+volume_size   = 30               # GB — sufficient without OCR model caches
+
+# For the full stack with Elasticsearch + OCR, use:
+# instance_type = "t3.large"    # 2 vCPU, 8 GB (~$60/mo)
+# volume_size   = 50
 
 # SSH key pair (must already exist in your AWS account)
 key_name = "my-key-pair"
