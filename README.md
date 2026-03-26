@@ -43,6 +43,16 @@ Other services: Elasticsearch :9200, OCR Service :8002
 - **Self-contained and portable.** Runs on a laptop, a cloud VM, or a CI pipeline. Docker Compose up, one `.env` file, no external dependencies beyond Docker itself.
 - **End-to-end demo flow.** Populate data via the API, stream it to Databricks, query graphs, read tables over JDBC, write results to Delta — all covered in the provided notebooks with working code.
 
+## How It Works — Deep Dives
+
+New to the stack? These guides explain the internals — how data is generated, why design decisions were made, and how each system fits together. Start with whichever system you're working with:
+
+| Guide | What you'll learn |
+|-------|-------------------|
+| [Kafka Data Generation](docs/kafka-data-generation.md) | How PySpark + dbldatagen generates streaming data, the generator lifecycle, weighted distributions, all 9 use case schemas, custom generators, and consuming from Databricks Structured Streaming |
+| [Neo4j Graph Generation](docs/neo4j-graph-generation.md) | How graph data is populated with batch Cypher, node/relationship models for all 6 SLED use cases, custom graph generators, graph vs. relational trade-offs, and querying from Databricks via the Spark connector |
+| [PostgreSQL Data Generation](docs/postgres-data-generation.md) | How relational data is bulk-inserted, table schemas for all 6 SLED use cases, the Kafka event audit log, custom table generators, and reading from Databricks via JDBC and Lakehouse Federation |
+
 ## Quick Start
 
 ```bash
