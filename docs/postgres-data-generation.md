@@ -407,4 +407,4 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-Migrations run automatically on container start via `startup.sh`. The SLED tables (`sled_*`) and custom tables (`custom_*`) are **not** managed by Alembic — they're created dynamically by the endpoint code with `CREATE TABLE IF NOT EXISTS`.
+Migrations run automatically on container start via `docker-entrypoint.sh`. The SLED tables (`sled_*`) and custom tables (`custom_*`) are **not** managed by Alembic — they're created dynamically by the endpoint code with `CREATE TABLE IF NOT EXISTS`.

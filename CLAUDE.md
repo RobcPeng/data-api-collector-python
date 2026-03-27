@@ -21,7 +21,7 @@ docker compose up -d --build app
 docker compose up -d --build spark-generator
 
 # Generate fresh .env with strong secrets
-./scripts/setup-env.sh
+./start.sh
 ```
 
 ## Architecture
@@ -82,7 +82,7 @@ services/
 
 ## Database Migrations
 
-Uses Alembic. Migrations run automatically on container start via `startup.sh`.
+Uses Alembic. Migrations run automatically on container start via `docker-entrypoint.sh`.
 
 ```bash
 # Inside the app container or locally with the venv
@@ -116,6 +116,6 @@ The test script sources `.env` automatically. It tests health, auth, Postgres, N
 
 **Add a new generator use case**: Add schema builder in `services/spark_generator/spark_generator/main.py`, register in `_USE_CASE_BUILDERS` and `_DEFAULT_TOPICS` dicts.
 
-**Rotate credentials**: Run `./scripts/setup-env.sh` or edit `.env` manually. For Postgres/Neo4j password changes, wipe their volumes: `docker compose down && docker volume rm data-api-collector-python_postgres_data data-api-collector-python_neo4j_data && docker compose up -d`.
+**Rotate credentials**: Run `./start.sh` or edit `.env` manually. For Postgres/Neo4j password changes, wipe their volumes: `docker compose down && docker volume rm data-api-collector-python_postgres_data data-api-collector-python_neo4j_data && docker compose up -d`.
 
 **Rebuild after dependency changes**: Update `pyproject.toml`, run `uv lock`, then `docker compose up -d --build app` (or `spark-generator` for that service).

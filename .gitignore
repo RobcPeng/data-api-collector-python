@@ -16,10 +16,12 @@ env/
 api-keys.json
 !api-keys.json.example
 kafka_server_jaas.conf
+certs/
 *.pem
 *.key
 *.crt
 *.p12
+.zrok-logs/
 
 # IDE
 .idea/

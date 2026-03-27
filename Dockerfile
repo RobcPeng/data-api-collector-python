@@ -18,11 +18,11 @@ RUN uv sync --frozen
 # Copy application code
 COPY . .
 
-COPY startup.sh /startup.sh
-RUN chmod +x /startup.sh
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8000
 
 # Run the application
-ENTRYPOINT ["/startup.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

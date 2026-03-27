@@ -56,23 +56,45 @@ New to the stack? These guides explain the internals — how data is generated, 
 ## Quick Start
 
 ```bash
-# Clone the repository
+# Clone and run the interactive setup
 git clone <repo-url>
 cd data-api-collector-python
+./start.sh
+```
 
-# Option A: Generate .env with strong random secrets
-./scripts/setup-env.sh
+The startup script walks you through everything: generates secrets, asks if you want local-only or zrok tunnels, installs zrok if needed, starts Docker, and prints a summary with all URLs and credentials.
 
-# Option B: Manual setup
+```bash
+# Management
+./start.sh --status    # show what's running (Docker + zrok)
+./start.sh --stop      # stop everything
+
+# Run the full test suite
+./tests/test_services.sh
+```
+
+<details>
+<summary>Manual setup (without the interactive script)</summary>
+
+```bash
+# Copy and edit .env manually
 cp .env.example .env
 # Edit .env — at minimum change SECRET_KEY, NEO4J_PASSWORD, POSTGRES_PASSWORD
 
-# Start everything
+# Generate self-signed SSL certs for Postgres
+mkdir -p certs
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout certs/server.key -out certs/server.crt -subj "/CN=localhost"
+# Update SSL_CERT_PATH and SSL_KEY_PATH in .env to point at ./certs/
+
+# Start the Docker stack
 docker compose up -d
 
-# Run the test suite to verify
+# Verify
 ./tests/test_services.sh
 ```
+
+</details>
 
 ## Services
 
@@ -902,7 +924,7 @@ docker compose up -d
 
 ```bash
 # Generate new .env with fresh secrets, then wipe and restart
-./scripts/setup-env.sh
+./start.sh   # say "yes" to regenerate secrets
 docker compose down
 docker volume rm \
   data-api-collector-python_postgres_data \
@@ -932,7 +954,11 @@ When Databricks or other external clients need to reach this stack, you have thr
 
 #### Option A: zrok (simplest for dev/demos)
 
-[zrok](https://zrok.io/) is a free, open-source (Apache 2.0) tunnel built on [OpenZiti](https://openziti.io/). It supports **both HTTP and TCP** tunnels, so it can expose all services — API, Kafka, Postgres, and Neo4j — without separate tools.
+[zrok](https://zrok.io/) is a free, open-source (Apache 2.0) tunnel built on [OpenZiti](https://openziti.io/).
+
+> **Limitation:** zrok public shares are **HTTP-only**. This means the REST API works from Databricks, but **Kafka Structured Streaming, JDBC (Postgres), and Neo4j Bolt do not work through zrok** — those protocols require direct TCP access. The private TCP tunnels (`tcpTunnel` mode) require the `zrok access` client on both ends, which cannot be installed on Databricks clusters. For Kafka/Postgres/Neo4j access from Databricks, use a cloud VM (Option B) or a network with direct IP connectivity.
+
+**Install and one-time setup:**
 
 ```bash
 # Install (Linux)
@@ -946,22 +972,26 @@ zrok invite    # sends email with token
 zrok enable <token>
 ```
 
-**Expose the API gateway (HTTP — public, no client setup needed):**
+**Quick start with `start.sh`:**
+
+The interactive `./start.sh` handles zrok setup automatically — choose option 2 (zrok tunnels) when prompted. It installs zrok if needed, runs `zrok enable` with your token, starts Docker, and opens tunnels:
 
 ```bash
-zrok share public http://localhost:10800
-# Outputs a public URL like https://abc123.share.zrok.io
+./start.sh              # interactive — walks through zrok setup
+./start.sh --status     # show running tunnels and share tokens
+./start.sh --stop       # kill everything (Docker + zrok)
 ```
 
-**Expose TCP services (private — requires `zrok access` on the client):**
+Tunnel logs are written to `.zrok-logs/` where you can retrieve share tokens later.
 
-```bash
-# Run each in a separate terminal on the host machine
-zrok share private --backend-mode tcpTunnel 127.0.0.1:9094    # Kafka
-zrok share private --backend-mode tcpTunnel 127.0.0.1:15433   # PostgreSQL
-zrok share private --backend-mode tcpTunnel 127.0.0.1:7687    # Neo4j Bolt
-# Each outputs a share token like "abc123xyz"
-```
+**What the script starts:**
+
+| Flag | Service | Mode | Backend |
+|------|---------|------|---------|
+| (default) | API | public HTTP | `http://localhost:10800` |
+| `--all` | Kafka | private TCP | `127.0.0.1:9094` |
+| `--all` | PostgreSQL | private TCP | `127.0.0.1:15433` |
+| `--all` | Neo4j | private TCP | `127.0.0.1:7687` |
 
 **Access TCP services (run on your client machine / Databricks driver):**
 
@@ -981,7 +1011,24 @@ zrok reserve private --backend-mode tcpTunnel 127.0.0.1:9094
 # Returns a permanent token — use it with `zrok share reserved <token>`
 ```
 
-> **When to use:** Quick demos, POCs, sharing with a colleague. No firewall rules or cloud infrastructure needed. The public HTTP share gives instant browser-accessible URLs; private TCP shares give full database/broker access to anyone with the share token.
+<details>
+<summary>Manual tunnel commands (without the script)</summary>
+
+```bash
+# API (public — no client setup needed)
+zrok share public http://localhost:10800
+
+# TCP services (each in a separate terminal)
+zrok share private --backend-mode tcpTunnel 127.0.0.1:9094    # Kafka
+zrok share private --backend-mode tcpTunnel 127.0.0.1:15433   # PostgreSQL
+zrok share private --backend-mode tcpTunnel 127.0.0.1:7687    # Neo4j Bolt
+```
+
+</details>
+
+> **When to use:** Quick demos and POCs where you only need the REST API from Databricks. The public HTTP share gives instant browser-accessible URLs. Private TCP shares work for Kafka/Postgres/Neo4j between machines where you can install the `zrok access` client on both ends (e.g., two laptops), but **not** from Databricks clusters.
+>
+> **For full Databricks integration** (Kafka Structured Streaming, JDBC, Neo4j Spark Connector), deploy to a cloud VM (Option B) where all ports are directly accessible.
 
 #### Option B: Cloud VM / VPS
 
@@ -1421,7 +1468,7 @@ data-api-collector-python/
 ├── Dockerfile
 ├── Caddyfile
 ├── pyproject.toml
-├── startup.sh
+├── docker-entrypoint.sh
 ├── .env.example
 ├── .gitignore
 ├── examples/
@@ -1440,8 +1487,8 @@ data-api-collector-python/
 │       ├── outputs.tf             # Instance IP, URLs, SSH command
 │       ├── user_data.sh           # Bootstrap script (Docker, clone, start)
 │       └── terraform.tfvars.example
-├── scripts/
-│   └── setup-env.sh               # Generate .env with strong secrets
+├── start.sh                        # Interactive setup & start (secrets, certs, Docker, zrok)
+├── stop.sh                         # Stop everything (Docker + zrok)
 ├── tests/
 │   └── test_services.sh           # Comprehensive test suite (60 tests)
 ├── docs/

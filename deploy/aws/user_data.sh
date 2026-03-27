@@ -45,9 +45,10 @@ cd data-api-collector
 # --------------------------------------------------------------------------
 # Generate environment file with strong secrets
 # --------------------------------------------------------------------------
-if [[ -f ./scripts/setup-env.sh ]]; then
-    chmod +x ./scripts/setup-env.sh
-    ./scripts/setup-env.sh
+if [[ -f ./start.sh ]]; then
+    chmod +x ./start.sh
+    # Non-interactive: just generate env and certs, don't start Docker yet
+    echo "1" | ./start.sh
 else
     cp .env.example .env
     # Generate random secrets

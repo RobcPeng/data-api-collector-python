@@ -122,7 +122,7 @@ git clone https://github.com/RobcPeng/data-api-collector-python.git
 cd data-api-collector-python
 
 # Generate .env with random secrets
-./scripts/setup-env.sh
+./start.sh
 
 # Update the external hostname
 sed -i "s|KAFKA_EXTERNAL_HOST=.*|KAFKA_EXTERNAL_HOST=$(curl -s ifconfig.me)|" .env
@@ -155,7 +155,7 @@ Run on your laptop for local development and testing.
 git clone https://github.com/RobcPeng/data-api-collector-python.git
 cd data-api-collector-python
 
-./scripts/setup-env.sh
+./start.sh
 docker compose up -d
 ./tests/test_services.sh health
 ```
@@ -164,18 +164,18 @@ docker compose up -d
 
 From a laptop, use one of:
 
-**zrok** (free, open source, HTTP + TCP):
+**zrok** (free, open source, **HTTP only** — REST API works, but Kafka/Postgres/Neo4j TCP protocols require a cloud VM):
 ```bash
 # Install: https://docs.zrok.io/docs/guides/install/
 curl -sSf https://get.openziti.io/install.bash | sudo bash -s zrok
+# macOS: brew install zrok
 zrok invite  # one-time account setup
 zrok enable <token>
 
-# Expose services (each in a separate terminal)
-zrok share public http://localhost:10800                           # API (public URL)
-zrok share private --backend-mode tcpTunnel 127.0.0.1:9094        # Kafka
-zrok share private --backend-mode tcpTunnel 127.0.0.1:15433       # Postgres
-zrok share private --backend-mode tcpTunnel 127.0.0.1:7687        # Neo4j
+# Use the startup script (manages all tunnels as background processes)
+./start.sh                             # interactive — choose zrok option
+./start.sh --status                    # Show running tunnels + share tokens
+./start.sh --stop                      # Kill everything
 
 # On the client machine, access private shares:
 zrok access private --bind 127.0.0.1:9094 <kafka-token>
@@ -212,7 +212,7 @@ pip install -r requirements.txt 2>/dev/null || pip install fastapi uvicorn sqlal
 | Concern | Recommendation |
 |---|---|
 | **Network access** | Restrict `allowed_cidr_blocks` to your IP or Databricks NAT range |
-| **Credentials** | Always use `./scripts/setup-env.sh` to generate strong random secrets |
+| **Credentials** | Always use `./start.sh` to generate strong random secrets |
 | **SSH** | Use key-based auth only, disable password auth |
 | **HTTPS** | For production, set `enable_https = true` with a domain name |
 | **Firewall** | Only open ports you need. For Databricks-only access: 10800, 9093, 15433 |

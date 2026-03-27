@@ -77,7 +77,7 @@ The current `.gitignore` already excludes `.env`. To make deployment smooth:
 
 ```bash
 #!/usr/bin/env bash
-# scripts/setup-env.sh
+# start.sh
 if [[ -f .env ]]; then
     echo ".env already exists. Remove it first to regenerate."
     exit 1
@@ -179,7 +179,7 @@ This prevents Caddy from directly reaching databases, and prevents the spark-gen
 
 - [ ] Copy `.env.example` to `.env` and set strong, unique values
 - [ ] Never commit `.env` — it's in `.gitignore`
-- [ ] Run `scripts/setup-env.sh` to auto-generate strong secrets
+- [ ] Run `start.sh` to auto-generate strong secrets
 - [ ] Review Caddy catch-all route before exposing to network
 - [ ] Use Databricks secrets for storing connection credentials
 - [ ] Enable SASL/SSL on Kafka before exposing externally
